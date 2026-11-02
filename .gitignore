@@ -1,0 +1,25 @@
+# Ambientes virtuais
+.venv/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+
+# Dados locais do aluno
+data/
+*.json
+!data/.gitkeep
+
+# Segredos e variáveis de ambiente
+.env
+*.pem
+*.key
+
+# Build & empacotamento
+dist/
+build/
+*.egg-info/

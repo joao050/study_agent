@@ -9,7 +9,8 @@ Agente inteligente de estudos via terminal (CLI) que atua como um mentor particu
 ```text
 study-agent/
 ├── .agent/rules/                # Regras permanentes para o agente/assistente
-│   └── context_management.md    # Economia de contexto, didática e navegação por mapa
+│   ├── context_management.md    # Economia de contexto, didática e navegação por mapa
+│   └── git_workflow.md          # GitFlow automatizado, commits pt-BR e controle de push
 ├── data/                        # Dados locais de sessões e histórico dos estudantes (JSON)
 ├── study_agent/
 │   ├── __init__.py              # Versão do pacote

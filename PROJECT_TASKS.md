@@ -5,16 +5,9 @@
 - **Objetivo:** Configurar ambiente, dependências, schemas Pydantic e regras operacionais.
 
 ## 2. Em Andamento
-- Nenhuma no momento (próxima: `#TASK-03`).
+- Nenhuma no momento (próxima: `#TASK-04`).
 
 ## 3. Planejadas (Backlog)
-
----
-
-### 🔹 `#TASK-03` — Cliente Unificado de LLM (`core/llm_client.py`)
-- **Status:** `[Planejado]`
-- **Áreas:** `study_agent/core/llm_client.py`, `study_agent/config.py`
-- **Descrição:** Implementar cliente com LiteLLM para chamar Gemini, OpenAI, Claude ou Ollama, com suporte a Structured Outputs (retorno em JSON validado por Pydantic).
 
 ---
 
@@ -54,6 +47,7 @@
 ---
 
 ## 4. Concluídas
+- [x] `#TASK-03` | 04/11/2026 | Cliente unificado LiteLLM com structured outputs, sanitização de JSON e testes | `study_agent/config.py`, `study_agent/core/llm_client.py`, `tests/test_llm_client.py`
 - [x] `#TASK-02` | 02/11/2026 | Schemas Pydantic v2 (StudentProfile, Curriculum, Topic, ActiveRecall) com testes unitários | `study_agent/models/*.py`, `tests/test_models.py`
 - [x] `#TASK-01` | 02/11/2026 | Estrutura base, regras de contexto, PROJECT_MAP, PROJECT_TASKS, requirements.txt, .gitignore e .env.example | `.agent/rules/*`, `PROJECT_MAP.md`, `PROJECT_TASKS.md`, `requirements.txt`, `.env.example`, `.gitignore`
 
@@ -63,3 +57,4 @@
 - **Decisão 3 (02/11/2026):** Adoção de `context_management.md` + `PROJECT_MAP.md` + `PROJECT_TASKS.md` para persistência de memória do agente e economia cirúrgica de tokens.
 - **Decisão 4 (02/11/2026):** Uso de Pydantic v2 com `Field(ge=..., le=...)` para validação estrita de scores/limites e métodos de transição de status na própria entidade `Curriculum`.
 - **Decisão 5 (04/11/2026):** GitFlow adotado com branches `main` (produção estável), `develop` (integração) e branches dinâmicas `feature/*` ou `fix/*`. Commits padronizados em pt-BR e `git push` condicionado à aprovação prévia do usuário (documentado em `.agent/rules/git_workflow.md`).
+- **Decisão 6 (04/11/2026):** Extração e sanitização robusta de JSON regex em `LLMClient` para garantir compatibilidade de Structured Outputs mesmo em provedores/modelos que envolvem retornos em blocos markdown.

@@ -32,6 +32,7 @@ study-agent/
 │       └── session_store.py     # Leitura e escrita de perfis e trilhas em JSON local
 ├── tests/                       # Testes automatizados (pytest)
 │   ├── __init__.py
+│   ├── test_llm_client.py       # Testes unitários do cliente unificado LiteLLM
 │   └── test_models.py           # Testes de integridade de schemas Pydantic
 ├── .env.example                 # Exemplo de configuração de variáveis de ambiente
 ├── .gitignore                   # Ignora dados locais, venv, caches e chaves

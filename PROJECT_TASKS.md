@@ -5,16 +5,9 @@
 - **Objetivo:** Configurar ambiente, dependências, schemas Pydantic e regras operacionais.
 
 ## 2. Em Andamento
-- Nenhuma no momento (próxima: `#TASK-04`).
+- Nenhuma no momento (próxima: `#TASK-05`).
 
 ## 3. Planejadas (Backlog)
-
----
-
-### 🔹 `#TASK-04` — Módulo Diagnosticador (`core/diagnostician.py`)
-- **Status:** `[Planejado]`
-- **Áreas:** `study_agent/core/diagnostician.py`
-- **Descrição:** Lógica para gerar perguntas de nivelamento baseadas no objetivo do aluno e avaliar suas respostas para estimar o ponto de partida.
 
 ---
 
@@ -47,6 +40,7 @@
 ---
 
 ## 4. Concluídas
+- [x] `#TASK-04` | 08/11/2026 | Módulo Diagnostician com geração progressiva de perguntas, avaliação de respostas e relatório diagnóstico com testes | `study_agent/core/diagnostician.py`, `study_agent/core/__init__.py`, `tests/test_diagnostician.py`
 - [x] `#TASK-03` | 04/11/2026 | Cliente unificado LiteLLM com structured outputs, sanitização de JSON e testes | `study_agent/config.py`, `study_agent/core/llm_client.py`, `tests/test_llm_client.py`
 - [x] `#TASK-02` | 02/11/2026 | Schemas Pydantic v2 (StudentProfile, Curriculum, Topic, ActiveRecall) com testes unitários | `study_agent/models/*.py`, `tests/test_models.py`
 - [x] `#TASK-01` | 02/11/2026 | Estrutura base, regras de contexto, PROJECT_MAP, PROJECT_TASKS, requirements.txt, .gitignore e .env.example | `.agent/rules/*`, `PROJECT_MAP.md`, `PROJECT_TASKS.md`, `requirements.txt`, `.env.example`, `.gitignore`
@@ -58,3 +52,4 @@
 - **Decisão 4 (02/11/2026):** Uso de Pydantic v2 com `Field(ge=..., le=...)` para validação estrita de scores/limites e métodos de transição de status na própria entidade `Curriculum`.
 - **Decisão 5 (04/11/2026):** GitFlow adotado com branches `main` (produção estável), `develop` (integração) e branches dinâmicas `feature/*` ou `fix/*`. Commits padronizados em pt-BR e `git push` condicionado à aprovação prévia do usuário (documentado em `.agent/rules/git_workflow.md`).
 - **Decisão 6 (04/11/2026):** Extração e sanitização robusta de JSON regex em `LLMClient` para garantir compatibilidade de Structured Outputs mesmo em provedores/modelos que envolvem retornos em blocos markdown.
+- **Decisão 7 (08/11/2026):** Diagnostician concebido com injeção de dependência de `LLMClient`, containers de structured outputs e consolidação determinística de `KnowledgeLevel` através de faixas de pontuação (<50: beginner, 50-80: intermediate, >=80: advanced).

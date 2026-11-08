@@ -1,5 +1,6 @@
 """Módulo core com inteligência pedagógica e cliente LLM do AI Study Agent."""
 
+from study_agent.core.diagnostician import Diagnostician, DiagnosticReport
 from study_agent.core.llm_client import (
     LLMClient,
     LLMClientError,
@@ -10,4 +11,6 @@ __all__ = [
     "LLMClient",
     "LLMClientError",
     "LLMResponseValidationError",
+    "Diagnostician",
+    "DiagnosticReport",
 ]

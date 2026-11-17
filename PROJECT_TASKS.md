@@ -5,16 +5,9 @@
 - **Objetivo:** Configurar ambiente, dependências, schemas Pydantic e regras operacionais.
 
 ## 2. Em Andamento
-- Nenhuma no momento (próxima: `#TASK-07`).
+- Nenhuma no momento (próxima: `#TASK-08`).
 
 ## 3. Planejadas (Backlog)
-
----
-
-### 🔹 `#TASK-07` — Persistência Local em JSON (`storage/session_store.py`)
-- **Status:** `[Planejado]`
-- **Áreas:** `study_agent/storage/session_store.py`
-- **Descrição:** Salvar e carregar o progresso do aluno no diretório local de dados para permitir retomada de estudos a qualquer momento.
 
 ---
 
@@ -26,6 +19,7 @@
 ---
 
 ## 4. Concluídas
+- [x] `#TASK-07` | 17/11/2026 | Camada de persistência SessionStore (gravação atômica, perfis, trilhas, sessão ativa e deleção em cascata) com testes | `study_agent/storage/session_store.py`, `study_agent/storage/__init__.py`, `study_agent/config.py`, `tests/test_session_store.py`
 - [x] `#TASK-06` | 16/11/2026 | Módulos Teacher (Feynman, técnico, prático, dúvidas, takeaways) e Evaluator (Active Recall, notas de domínio, atualização de tópicos) com testes | `study_agent/core/teacher.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `tests/test_teacher.py`, `tests/test_evaluator.py`
 - [x] `#TASK-05` | 08/11/2026 | Módulo CurriculumGenerator com encadeamento de tópicos, sanitização DAG de pré-requisitos, árvore ASCII, exportação Mermaid e testes | `study_agent/core/curriculum_gen.py`, `study_agent/core/__init__.py`, `tests/test_curriculum_gen.py`
 - [x] `#TASK-04` | 08/11/2026 | Módulo Diagnostician com geração progressiva de perguntas, avaliação de respostas e relatório diagnóstico com testes | `study_agent/core/diagnostician.py`, `study_agent/core/__init__.py`, `tests/test_diagnostician.py`
@@ -43,3 +37,4 @@
 - **Decisão 7 (08/11/2026):** Diagnostician concebido com injeção de dependência de `LLMClient`, containers de structured outputs e consolidação determinística de `KnowledgeLevel` através de faixas de pontuação (<50: beginner, 50-80: intermediate, >=80: advanced).
 - **Decisão 8 (08/11/2026):** CurriculumGenerator com sanitização de dependências DAG (eliminação de auto-referências e ciclos simples), desbloqueio dinâmico dos tópicos iniciais e visualização dupla (árvore formatada e Mermaid flowchart).
 - **Decisão 9 (16/11/2026):** Módulo Teacher com 3 abordagens pedagógicas (Feynman com analogias, Técnico formal e Prático com código) e Evaluator com checagem de retenção ativa (Active Recall), nota de corte >= 70% para promoção a MASTERED e atualização ponderada de domínio.
+- **Decisão 10 (17/11/2026):** SessionStore implementado com gravação atômica via arquivos temporários (.tmp -> replace), separação em subpastas profiles e curricula, e ponteiro current_session.json para retomada imediata do último estudo sem argumentos de CLI.

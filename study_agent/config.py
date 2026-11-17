@@ -29,6 +29,9 @@ class Settings(BaseSettings):
     # Provedor local (Ollama)
     ollama_api_base: str = "http://localhost:11434"
 
+    # Diretório de persistência de dados
+    data_dir: str = "data"
+
 
 @lru_cache()
 def get_settings() -> Settings:

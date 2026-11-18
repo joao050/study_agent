@@ -5,10 +5,46 @@
 - **Objetivo:** Todas as tarefas da Fase 1 foram entregues com 100% dos testes aprovados.
 
 ## 2. Em Andamento
-- Nenhuma no momento (Fase 1 finalizada; Fase 2 a ser planejada com o usuário).
+- Nenhuma no momento (Fase 1 finalizada; Fase 2 a ser iniciada após alinhamento do backlog).
 
-## 3. Planejadas (Backlog)
-- [Planejamento da Fase 2: Gamificação avançada, exportações em PDF/Markdown de resumos, sincronização remota ou interface web].
+## 3. Planejadas (Backlog — Fase 2)
+
+---
+
+### 🔹 `#TASK-09` — Resiliência de Conexão com LLM & Retries Automáticos
+- **Status:** `[Planejado]`
+- **Áreas:** `study_agent/core/llm_client.py`, `study_agent/cli.py`
+- **Origem dos Experimentos:** Durante testes manuais, picos de tráfego do Free Tier da Gemini retornaram `503 Service Unavailable`.
+- **Escopo:**
+  1. Adicionar política de retry automático com backoff exponencial (`num_retries=3`) no `LLMClient`.
+  2. Implementar tratamento gracioso de exceções no CLI, exibindo aviso visual amigável via Rich em vez de traceback bruto.
+
+---
+
+### 🔹 `#TASK-10` — Ergonomia de Execução CLI & Entrypoint no Windows
+- **Status:** `[Planejado]`
+- **Áreas:** `study_agent/cli.py`, `pyproject.toml` / `setup.py`, `README.md`
+- **Origem dos Experimentos:** Usuário se deparou com política de execução restrita de `.ps1` no PowerShell e comando global `study-agent` não encontrado sem ativação explícita de `.venv`.
+- **Escopo:**
+  1. Padronizar mensagens de instrução no CLI para sugerir o comando portátil `python -m study_agent.cli study`.
+  2. Adicionar script wrapper executável (ex: `study-agent.bat`) e registrar entrypoint de console no pacote Python.
+  3. Documentar no `README.md` a resolução rápida de `Set-ExecutionPolicy` para novos usuários no Windows.
+
+---
+
+### 🔹 `#TASK-11` — Exportação de Resumos de Sessão (Markdown / PDF)
+- **Status:** `[Planejado]`
+- **Áreas:** `study_agent/core/`, `study_agent/cli.py`
+- **Descrição:** Gerar resumos exportáveis dos tópicos dominados, com perguntas e respostas de Active Recall para revisão espaçada offline.
+
+---
+
+### 🔹 `#TASK-12` — Gamificação & Streaks de Aprendizado
+- **Status:** `[Planejado]`
+- **Áreas:** `study_agent/models/student.py`, `study_agent/cli.py`
+- **Descrição:** Implementar controle de dias seguidos de estudo (streaks), badges de conquista e cálculo de pontuação acumulada.
+
+---
 
 ## 4. Concluídas
 - [x] `#TASK-08` | 17/11/2026 | Interface CLI interativa com Typer e Rich (init, study, status, map, students, version) orquestrando core e storage com testes | `study_agent/cli.py`, `tests/test_cli.py`

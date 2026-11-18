@@ -17,7 +17,7 @@ class Settings(BaseSettings):
 
     # Configuração padrão do LLM
     llm_provider: str = "gemini"
-    llm_model: str = "gemini/gemini-2.5-flash"
+    llm_model: str = "gemini/gemini-flash-lite-latest"
     temperature: float = 0.7
     max_tokens: int = 2048
 

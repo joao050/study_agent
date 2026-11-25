@@ -7,7 +7,10 @@ from study_agent.models.curriculum import (
     ActiveRecallEvaluation,
     ActiveRecallQuestion,
     Curriculum,
+    ErrorDebugResolution,
     ExplanationStyle,
+    GuidedLab,
+    LabMission,
     Topic,
     TopicStatus,
 )
@@ -139,3 +142,42 @@ def test_active_recall_evaluation_validation():
     )
     assert eval_result.is_passing is True
     assert eval_result.score == 90.0
+
+
+def test_guided_lab_and_error_debug_models():
+    """Valida os schemas Pydantic de laboratório guiado e diagnóstico de erros."""
+    assert ExplanationStyle.GUIDED_LAB == "guided_lab"
+
+    mission = LabMission(
+        step_number=1,
+        title="Verificar instalação do Docker",
+        instruction="Confira se o cliente Docker está acessível no terminal.",
+        command_or_code="docker --version",
+        expected_outcome="Exibe a versão instalada, ex: Docker version 27.x",
+        verification_hint="No Windows, abra o Docker Desktop antes.",
+    )
+    lab = GuidedLab(
+        topic_id="t1",
+        intro_brief="Containers isolam processos usando recursos do kernel.",
+        prerequisites_check="Docker Desktop instalado",
+        missions=[mission],
+    )
+    assert lab.topic_id == "t1"
+    assert len(lab.missions) == 1
+    assert lab.missions[0].step_number == 1
+
+    with pytest.raises(ValidationError):
+        GuidedLab(topic_id="t1", intro_brief="Sem missões", missions=[])
+
+    resolution = ErrorDebugResolution(
+        error_summary="O cliente Docker não conseguiu conectar ao motor (daemon).",
+        root_cause="O serviço do Docker Desktop está fechado ou parado.",
+        fix_instructions=["Abra o aplicativo Docker Desktop", "Aguarde o ícone ficar verde"],
+        corrected_command_or_code="docker ps",
+        prevention_tip="Sempre verifique se o motor está ativo antes de rodar containers.",
+    )
+    assert len(resolution.fix_instructions) == 2
+    assert resolution.corrected_command_or_code == "docker ps"
+
+    topic = Topic(id="t_lab", title="Volumes", description="Persistência")
+    assert topic.completed_lab_steps == 0

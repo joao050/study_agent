@@ -15,6 +15,9 @@ from study_agent.models.curriculum import (
     ActiveRecallEvaluation,
     ActiveRecallQuestion,
     Curriculum,
+    ErrorDebugResolution,
+    GuidedLab,
+    LabMission,
     Topic,
     TopicStatus,
 )
@@ -419,3 +422,165 @@ def test_cli_study_active_recall_error_saves_partial_progress(
     assert sample_curriculum.topics[0].status == TopicStatus.IN_PROGRESS
     assert sample_curriculum.topics[0].key_takeaways == ["Namespaces", "Cgroups"]
     mock_store.save_curriculum.assert_called_once_with(sample_curriculum)
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Teacher")
+@patch("study_agent.cli.Evaluator")
+def test_cli_study_report_terminal_error_option_e(
+    mock_evaluator_cls,
+    mock_teacher_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa opção [E] no menu de estudo colando stack trace multilinha e prosseguindo."""
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    mock_teacher = MagicMock()
+    mock_teacher.explain_topic.return_value = "# Aula Prática de Docker"
+    mock_teacher.summarize_key_takeaways.return_value = ["Daemon", "CLI"]
+    mock_teacher.debug_error.return_value = ErrorDebugResolution(
+        error_summary="O motor do Docker não está em execução.",
+        root_cause="O serviço Docker Desktop está fechado no Windows.",
+        fix_instructions=["Inicie o Docker Desktop", "Rode docker info para confirmar"],
+        corrected_command_or_code="docker ps",
+        prevention_tip="Confira o ícone da baleia na bandeja do sistema.",
+    )
+    mock_teacher_cls.return_value = mock_teacher
+
+    mock_evaluator = MagicMock()
+    mock_evaluator.generate_active_recall_question.return_value = ActiveRecallQuestion(
+        id="q1", question="Qual papel do Docker daemon?", expected_concepts=["Gerenciar containers"]
+    )
+    mock_evaluator.evaluate_active_recall.return_value = ActiveRecallEvaluation(
+        question_id="q1",
+        student_answer="Gerencia os containers em background",
+        score=92.0,
+        understood_concepts=["Daemon"],
+        missing_or_confused_concepts=[],
+        feedback="Perfeito!",
+        is_passing=True,
+    )
+    mock_evaluator_cls.return_value = mock_evaluator
+
+    # Fluxo:
+    # 3 -> Estilo Prático
+    # E -> Reportar Erro / Colar Terminal
+    # docker run hello-world -> comando tentado
+    # 2 linhas de erro + linha vazia -> finaliza captura multilinha
+    # C -> Concluir estudo e ir para Active Recall
+    # Resposta do Active Recall
+    user_inputs = "\n".join([
+        "3",
+        "E",
+        "docker run hello-world",
+        "docker: error during connect: open //./pipe/docker_engine",
+        "The system cannot find the file specified.",
+        "",
+        "C",
+        "Gerencia os containers em background",
+    ])
+
+    result = runner.invoke(app, ["study"], input=user_inputs)
+    assert result.exit_code == 0
+    assert "Assistente de Debugging em Tempo Real" in result.output
+    assert "Docker Desktop" in result.output
+    assert "Tópico Dominado!" in result.output
+
+    mock_teacher.debug_error.assert_called_once()
+    debug_kwargs = mock_teacher.debug_error.call_args.kwargs
+    assert debug_kwargs["command_attempted"] == "docker run hello-world"
+    assert "docker_engine" in debug_kwargs["error_output"]
+    assert "cannot find the file" in debug_kwargs["error_output"]
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Teacher")
+@patch("study_agent.cli.Evaluator")
+def test_cli_study_guided_lab_mode_with_error_checkpoint(
+    mock_evaluator_cls,
+    mock_teacher_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa estilo [4] Laboratório Guiado Passo a Passo com erro na Missão 1 e conclusão."""
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    mock_teacher = MagicMock()
+    mock_teacher.generate_guided_lab.return_value = GuidedLab(
+        topic_id="t1",
+        intro_brief="Vamos testar containers na prática.",
+        prerequisites_check="Docker ativo",
+        missions=[
+            LabMission(
+                step_number=1,
+                title="Verificar versão",
+                instruction="Valide o CLI do Docker",
+                command_or_code="docker --version",
+                expected_outcome="Mostra versão instalada",
+            ),
+            LabMission(
+                step_number=2,
+                title="Subir hello-world",
+                instruction="Execute seu primeiro container",
+                command_or_code="docker run --rm hello-world",
+                expected_outcome="Imprime Hello from Docker!",
+            ),
+        ],
+    )
+    mock_teacher.debug_error.return_value = ErrorDebugResolution(
+        error_summary="Flag digitada com apenas um hífen.",
+        root_cause="Você digitou -version em vez de --version.",
+        fix_instructions=["Use dois hífens: docker --version"],
+        corrected_command_or_code="docker --version",
+    )
+    mock_teacher.summarize_key_takeaways.return_value = ["CLI", "Hello World"]
+    mock_teacher_cls.return_value = mock_teacher
+
+    mock_evaluator = MagicMock()
+    mock_evaluator.generate_active_recall_question.return_value = ActiveRecallQuestion(
+        id="q_lab", question="O que faz a flag --rm?", expected_concepts=["Remove container ao sair"]
+    )
+    mock_evaluator.evaluate_active_recall.return_value = ActiveRecallEvaluation(
+        question_id="q_lab",
+        student_answer="Remove o container assim que ele termina",
+        score=95.0,
+        understood_concepts=["Limpeza automática"],
+        missing_or_confused_concepts=[],
+        feedback="Excelente domínio prático!",
+        is_passing=True,
+    )
+    mock_evaluator_cls.return_value = mock_evaluator
+
+    # Fluxo:
+    # 4 -> Laboratório Guiado Passo a Passo
+    # E -> Na Missão 1, reporta erro
+    # "" -> Aceita o default_command (docker --version)
+    # "unknown shorthand flag: 'v' in -version" + "" -> envia erro multilinha
+    # P -> Missão 1 funcionou!
+    # P -> Missão 2 funcionou!
+    # Resposta Active Recall
+    user_inputs = "\n".join([
+        "4",
+        "E",
+        "",
+        "unknown shorthand flag: 'v' in -version",
+        "",
+        "P",
+        "P",
+        "Remove o container assim que ele termina",
+    ])
+
+    result = runner.invoke(app, ["study"], input=user_inputs)
+    assert result.exit_code == 0
+    assert "Missão 1/2: Verificar versão" in result.output
+    assert "Missão 2/2: Subir hello-world" in result.output
+    assert "Assistente de Debugging em Tempo Real" in result.output
+    assert sample_curriculum.topics[0].completed_lab_steps == 2
+    assert "Tópico Dominado!" in result.output

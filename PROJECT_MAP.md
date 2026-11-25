@@ -44,15 +44,15 @@ study-agent/
 ## 3. Mapa por Funcionalidade (Se for X, mexa em Y)
 | Funcionalidade | Arquivo : Função / Classe |
 | :--- | :--- |
-| Comandos de Terminal & Telas | `study_agent/cli.py` (`render_llm_error`, comandos Typer) |
+| Comandos de Terminal & Telas | `study_agent/cli.py` (`render_llm_error`, `render_debug_resolution`, laboratório guiado e comandos Typer) |
 | Configuração de Provedores & Chaves | `study_agent/config.py` (`Settings`: chaves, retries e timeouts) |
 | Chamadas unificadas de LLM (Prompt/JSON) | `study_agent/core/llm_client.py` (`LLMClient`, `LLMConnectionError`, `LLMAuthenticationError`) |
 | Perguntas de diagnóstico & cálculo de nível | `study_agent/core/diagnostician.py` |
 | Montagem da árvore de estudos & tópicos | `study_agent/core/curriculum_gen.py` |
-| Explicações didáticas, analogias Feynman | `study_agent/core/teacher.py` |
+| Explicações didáticas, laboratório & debug | `study_agent/core/teacher.py` (`explain_topic`, `generate_guided_lab`, `debug_error`) |
 | Testes de absorção & cálculo de pontuação | `study_agent/core/evaluator.py` |
 | Schemas do Aluno & Objetivos | `study_agent/models/student.py` |
-| Schemas da Trilha & Tópicos | `study_agent/models/curriculum.py` |
+| Schemas da Trilha, Laboratório & Debug | `study_agent/models/curriculum.py` (`Curriculum`, `Topic`, `GuidedLab`, `LabMission`, `ErrorDebugResolution`) |
 | Salvar/Recuperar progresso em disco | `study_agent/storage/session_store.py` |
 
 ## 4. Arquivos Sensíveis / Proibidos para Leitura Automática

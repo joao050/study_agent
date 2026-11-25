@@ -5,20 +5,9 @@
 - **Objetivo:** Elevar a robustez de rede, ergonomia no Windows e experiência prática de laboratório com debugging em tempo real.
 
 ## 2. Em Andamento
-- Nenhuma no momento (`#TASK-09` recém-concluída; próxima da fila: `#TASK-10`).
+- Nenhuma no momento (`#TASK-10` recém-concluída; próxima da fila: `#TASK-11`).
 
 ## 3. Planejadas (Backlog — Fase 2: Pedagogia Guiada, Resiliência & Ergonomia)
-
----
-
-### 🔹 `#TASK-10` — Modo Laboratório Guiado & Assistente de Debugging em Tempo Real
-- **Status:** `[Planejado - Prioridade Alta]`
-- **Áreas:** `study_agent/core/teacher.py`, `study_agent/cli.py`, `study_agent/models/curriculum.py`
-- **Origem dos Experimentos:** Aluno executando comandos práticos no terminal se depara com erros de ambiente/sintaxe e precisa de auxílio imediato para corrigir e continuar.
-- **Escopo:**
-  1. No `Teacher`, implementar método `debug_error(student, topic, command_attempted, error_output)` com prompt pedagógico calibrado para decodificar stack traces, explicar a causa raiz e fornecer a correção exata.
-  2. Implementar suporte a missões práticas passo a passo (*scaffolding* com checkpoints).
-  3. No `CLI`, adicionar opção explícita no menu de estudo: `[E] Reportar Erro / Colar Terminal`, com painel Rich dedicado para envio do output com falha.
 
 ---
 
@@ -48,6 +37,7 @@
 ---
 
 ## 5. Concluídas
+- [x] `#TASK-10` | 25/11/2026 | Modo Laboratório Guiado passo a passo (GuidedLab/LabMission) e Assistente de Debugging em tempo real (debug_error + opção [E] multilinha na CLI) com testes | `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/core/teacher.py`, `study_agent/cli.py`, `tests/test_models.py`, `tests/test_teacher.py`, `tests/test_cli.py`
 - [x] `#TASK-09` | 25/11/2026 | Resiliência de conexão no LLMClient (retries com backoff exponencial + jitter, distinção 503/429 vs 401) e tratamento gracioso com painéis Rich e salvamento parcial na CLI | `study_agent/core/llm_client.py`, `study_agent/core/__init__.py`, `study_agent/config.py`, `study_agent/cli.py`, `.env.example`, `tests/test_llm_client.py`, `tests/test_cli.py`
 - [x] `#TASK-08` | 17/11/2026 | Interface CLI interativa com Typer e Rich (init, study, status, map, students, version) orquestrando core e storage com testes | `study_agent/cli.py`, `tests/test_cli.py`
 - [x] `#TASK-07` | 17/11/2026 | Camada de persistência SessionStore (gravação atômica, perfis, trilhas, sessão ativa e deleção em cascata) com testes | `study_agent/storage/session_store.py`, `study_agent/storage/__init__.py`, `study_agent/config.py`, `tests/test_session_store.py`
@@ -72,3 +62,4 @@
 - **Decisão 11 (17/11/2026):** Interface CLI construída com Typer e Rich, suportando fluxo conversacional com spin indicators, renderização rica de tabelas de status, visualização de mapas ASCII e Mermaid, ciclo de estudo com dúvidas ilimitadas e checagem de Active Recall.
 - **Decisão 12 (18/11/2026):** Gamificação (badges, streaks, níveis) postergada para a Fase 3 (Interface Web), onde o apelo visual e a recompensa gráfica são muito maiores. O foco da Fase 2 foi direcionado 100% para a eficácia pedagógica prática (Modo Laboratório Guiado e Debugging em tempo real), resiliência de rede e ergonomia no Windows.
 - **Decisão 13 (25/11/2026):** Implementação de resiliência em duas camadas: no `LLMClient`, loop explícito de retry com *backoff exponencial + jitter* apenas para falhas transitórias (`503`, `429`, timeouts) e *fail-fast* imediato para credenciais inválidas (`401/403`); na `CLI`, renderização amigável via `render_llm_error` sem stack traces brutos e persistência automática de progresso parcial caso a rede caia no Active Recall.
+- **Decisão 14 (25/11/2026):** Modo Laboratório Guiado estruturado via *Scaffolding* com `GuidedLab` e `LabMission` (checkpoints explícitos `[P/E/D/A]`), somado ao método `Teacher.debug_error` sensível ao sistema operacional do aluno e captura multilinha de stack traces na opção `[E]` da CLI.

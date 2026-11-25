@@ -7,7 +7,7 @@
 ## 2. Em Andamento
 - Nenhuma no momento (Fase 1 finalizada; Fase 2 a ser iniciada após alinhamento do backlog).
 
-## 3. Planejadas (Backlog — Fase 2)
+## 3. Planejadas (Backlog — Fase 2: Pedagogia Guiada, Resiliência & Ergonomia)
 
 ---
 
@@ -21,32 +21,43 @@
 
 ---
 
-### 🔹 `#TASK-10` — Ergonomia de Execução CLI & Entrypoint no Windows
+### 🔹 `#TASK-10` — Modo Laboratório Guiado & Assistente de Debugging em Tempo Real
+- **Status:** `[Planejado - Prioridade Alta]`
+- **Áreas:** `study_agent/core/teacher.py`, `study_agent/cli.py`, `study_agent/models/curriculum.py`
+- **Origem dos Experimentos:** Aluno executando comandos práticos no terminal se depara com erros de ambiente/sintaxe e precisa de auxílio imediato para corrigir e continuar.
+- **Escopo:**
+  1. No `Teacher`, implementar método `debug_error(student, topic, command_attempted, error_output)` com prompt pedagógico calibrado para decodificar stack traces, explicar a causa raiz e fornecer a correção exata.
+  2. Implementar suporte a missões práticas passo a passo (*scaffolding* com checkpoints).
+  3. No `CLI`, adicionar opção explícita no menu de estudo: `[E] Reportar Erro / Colar Terminal`, com painel Rich dedicado para envio do output com falha.
+
+---
+
+### 🔹 `#TASK-11` — Ergonomia de Execução CLI & Entrypoint no Windows
 - **Status:** `[Planejado]`
-- **Áreas:** `study_agent/cli.py`, `pyproject.toml` / `setup.py`, `README.md`
+- **Áreas:** `study_agent/cli.py`, `study-agent.bat`, `README.md`
 - **Origem dos Experimentos:** Usuário se deparou com política de execução restrita de `.ps1` no PowerShell e comando global `study-agent` não encontrado sem ativação explícita de `.venv`.
 - **Escopo:**
   1. Padronizar mensagens de instrução no CLI para sugerir o comando portátil `python -m study_agent.cli study`.
-  2. Adicionar script wrapper executável (ex: `study-agent.bat`) e registrar entrypoint de console no pacote Python.
+  2. Adicionar script wrapper executável `study-agent.bat` para inicialização direta no Windows.
   3. Documentar no `README.md` a resolução rápida de `Set-ExecutionPolicy` para novos usuários no Windows.
 
 ---
 
-### 🔹 `#TASK-11` — Exportação de Resumos de Sessão (Markdown / PDF)
+### 🔹 `#TASK-12` — Exportação de Resumos de Sessão (Markdown & Anki Flashcards)
 - **Status:** `[Planejado]`
 - **Áreas:** `study_agent/core/`, `study_agent/cli.py`
-- **Descrição:** Gerar resumos exportáveis dos tópicos dominados, com perguntas e respostas de Active Recall para revisão espaçada offline.
+- **Descrição:** Gerar resumos estruturados dos tópicos dominados em `.md` e cartões de perguntas e respostas prontos para importação no Anki (estudo/revisão offline).
 
 ---
 
-### 🔹 `#TASK-12` — Gamificação & Streaks de Aprendizado
-- **Status:** `[Planejado]`
-- **Áreas:** `study_agent/models/student.py`, `study_agent/cli.py`
-- **Descrição:** Implementar controle de dias seguidos de estudo (streaks), badges de conquista e cálculo de pontuação acumulada.
+## 4. Backlog Futuro (Fase 3: Interface Web & Gamificação Visual)
+- **`#TASK-13` — Gamificação, Streaks e Badges Visuais:** Controle de dias seguidos (streaks), conquistas e níveis visuais integrados aos componentes da UI.
+- **`#TASK-14` — Interface Gráfica / Web:** Dashboard interativo com gráficos de domínio, visualização da árvore de conhecimento e laboratório de comandos interativo.
+- **`#TASK-15` — Sistema de Repetição Espaçada (SRS / Ebbinghaus):** Agendamento automatizado de revisões periódicas de tópicos pré-dominados.
 
 ---
 
-## 4. Concluídas
+## 5. Concluídas
 - [x] `#TASK-08` | 17/11/2026 | Interface CLI interativa com Typer e Rich (init, study, status, map, students, version) orquestrando core e storage com testes | `study_agent/cli.py`, `tests/test_cli.py`
 - [x] `#TASK-07` | 17/11/2026 | Camada de persistência SessionStore (gravação atômica, perfis, trilhas, sessão ativa e deleção em cascata) com testes | `study_agent/storage/session_store.py`, `study_agent/storage/__init__.py`, `study_agent/config.py`, `tests/test_session_store.py`
 - [x] `#TASK-06` | 16/11/2026 | Módulos Teacher (Feynman, técnico, prático, dúvidas, takeaways) e Evaluator (Active Recall, notas de domínio, atualização de tópicos) com testes | `study_agent/core/teacher.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `tests/test_teacher.py`, `tests/test_evaluator.py`
@@ -56,7 +67,7 @@
 - [x] `#TASK-02` | 02/11/2026 | Schemas Pydantic v2 (StudentProfile, Curriculum, Topic, ActiveRecall) com testes unitários | `study_agent/models/*.py`, `tests/test_models.py`
 - [x] `#TASK-01` | 02/11/2026 | Estrutura base, regras de contexto, PROJECT_MAP, PROJECT_TASKS, requirements.txt, .gitignore e .env.example | `.agent/rules/*`, `PROJECT_MAP.md`, `PROJECT_TASKS.md`, `requirements.txt`, `.env.example`, `.gitignore`
 
-## 5. Decisões de Arquitetura
+## 6. Decisões de Arquitetura
 - **Decisão 1 (02/11/2026):** Início por CLI em Python utilizando `rich` e `typer` para interface de terminal profissional, desacoplando o "core" para futura extensão web.
 - **Decisão 2 (02/11/2026):** Uso de `litellm` para suportar provedores variados (Gemini, OpenAI, Claude, Ollama) de forma intercambiável via variáveis de ambiente.
 - **Decisão 3 (02/11/2026):** Adoção de `context_management.md` + `PROJECT_MAP.md` + `PROJECT_TASKS.md` para persistência de memória do agente e economia cirúrgica de tokens.
@@ -68,3 +79,4 @@
 - **Decisão 9 (16/11/2026):** Módulo Teacher com 3 abordagens pedagógicas (Feynman com analogias, Técnico formal e Prático com código) e Evaluator com checagem de retenção ativa (Active Recall), nota de corte >= 70% para promoção a MASTERED e atualização ponderada de domínio.
 - **Decisão 10 (17/11/2026):** SessionStore implementado com gravação atômica via arquivos temporários (.tmp -> replace), separação em subpastas profiles e curricula, e ponteiro current_session.json para retomada imediata do último estudo sem argumentos de CLI.
 - **Decisão 11 (17/11/2026):** Interface CLI construída com Typer e Rich, suportando fluxo conversacional com spin indicators, renderização rica de tabelas de status, visualização de mapas ASCII e Mermaid, ciclo de estudo com dúvidas ilimitadas e checagem de Active Recall.
+- **Decisão 12 (18/11/2026):** Gamificação (badges, streaks, níveis) postergada para a Fase 3 (Interface Web), onde o apelo visual e a recompensa gráfica são muito maiores. O foco da Fase 2 foi direcionado 100% para a eficácia pedagógica prática (Modo Laboratório Guiado e Debugging em tempo real), resiliência de rede e ergonomia no Windows.

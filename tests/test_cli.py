@@ -7,6 +7,10 @@ from typer.testing import CliRunner
 from study_agent import __version__
 from study_agent.cli import app
 from study_agent.core.diagnostician import DiagnosticReport
+from study_agent.core.llm_client import (
+    LLMAuthenticationError,
+    LLMConnectionError,
+)
 from study_agent.models.curriculum import (
     ActiveRecallEvaluation,
     ActiveRecallQuestion,
@@ -288,3 +292,130 @@ def test_cli_study_full_flow(
     assert "Tópico Dominado!" in result.output
     assert "O próximo tópico da trilha foi desbloqueado" in result.output
     mock_store.save_curriculum.assert_called_once()
+
+
+@patch("study_agent.cli.Diagnostician")
+def test_cli_init_handles_llm_connection_error_gracefully(mock_diagnostician_cls):
+    """Verifica que falha 503 esgotada exibe painel amigável sem vazar stack trace bruto."""
+    mock_diag = MagicMock()
+    mock_diag.generate_questions.side_effect = LLMConnectionError(
+        "Falha após 4 tentativas: 503 Service Unavailable",
+        attempts=4,
+        status_code=503,
+        is_rate_limit=False,
+    )
+    mock_diagnostician_cls.return_value = mock_diag
+
+    user_inputs = "\n".join(["Carlos", "Rust", "2", "2", "45"])
+    result = runner.invoke(app, ["init"], input=user_inputs)
+
+    assert result.exit_code == 1
+    assert "Serviço de IA Temporariamente Indisponível" in result.output
+    assert "4 tentativa(s)" in result.output
+    assert "Traceback" not in result.output
+
+
+@patch("study_agent.cli.Diagnostician")
+def test_cli_init_handles_authentication_error_gracefully(mock_diagnostician_cls):
+    """Verifica aviso claro de configuração .env quando a API Key é inválida."""
+    mock_diag = MagicMock()
+    mock_diag.generate_questions.side_effect = LLMAuthenticationError("API key invalid")
+    mock_diagnostician_cls.return_value = mock_diag
+
+    user_inputs = "\n".join(["Ana", "FastAPI", "1", "1", "25"])
+    result = runner.invoke(app, ["init"], input=user_inputs)
+
+    assert result.exit_code == 1
+    assert "Erro de Credenciais / API Key" in result.output
+    assert ".env" in result.output
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Teacher")
+@patch("study_agent.cli.Evaluator")
+def test_cli_study_doubt_error_recovers_without_aborting_lesson(
+    mock_evaluator_cls,
+    mock_teacher_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Verifica que erro 503 ao tirar uma dúvida exibe painel amigável e mantém a aula viva."""
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    mock_teacher = MagicMock()
+    mock_teacher.explain_topic.return_value = "# Aula sobre Containers"
+    mock_teacher.summarize_key_takeaways.return_value = ["Isolamento"]
+    mock_teacher.answer_doubt.side_effect = LLMConnectionError(
+        "503 Service Unavailable", attempts=4, is_rate_limit=True
+    )
+    mock_teacher_cls.return_value = mock_teacher
+
+    mock_evaluator = MagicMock()
+    mock_evaluator.generate_active_recall_question.return_value = ActiveRecallQuestion(
+        id="q1", question="O que é um container?", expected_concepts=["Isolamento"]
+    )
+    mock_evaluator.evaluate_active_recall.return_value = ActiveRecallEvaluation(
+        question_id="q1",
+        student_answer="Processo isolado",
+        score=90.0,
+        understood_concepts=["Isolamento"],
+        missing_or_confused_concepts=[],
+        feedback="Muito bem!",
+        is_passing=True,
+    )
+    mock_evaluator_cls.return_value = mock_evaluator
+
+    user_inputs = "\n".join([
+        "1",
+        "y",
+        "Dúvida durante pico de tráfego",
+        "n",
+        "Processo isolado",
+    ])
+
+    result = runner.invoke(app, ["study"], input=user_inputs)
+    assert result.exit_code == 0
+    assert "Serviço de IA Temporariamente Indisponível" in result.output
+    assert "limite de requisições" in result.output
+    assert "429" in result.output
+    assert "Tópico Dominado!" in result.output
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Teacher")
+@patch("study_agent.cli.Evaluator")
+def test_cli_study_active_recall_error_saves_partial_progress(
+    mock_evaluator_cls,
+    mock_teacher_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Verifica que falha no Active Recall salva progresso parcial (IN_PROGRESS) antes de encerrar."""
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    mock_teacher = MagicMock()
+    mock_teacher.explain_topic.return_value = "# Aula sobre Containers"
+    mock_teacher.summarize_key_takeaways.return_value = ["Namespaces", "Cgroups"]
+    mock_teacher_cls.return_value = mock_teacher
+
+    mock_evaluator = MagicMock()
+    mock_evaluator.generate_active_recall_question.side_effect = LLMConnectionError(
+        "503 Unavailable", attempts=4
+    )
+    mock_evaluator_cls.return_value = mock_evaluator
+
+    user_inputs = "\n".join(["1", "n"])
+    result = runner.invoke(app, ["study"], input=user_inputs)
+
+    assert result.exit_code == 1
+    assert "Serviço de IA Temporariamente Indisponível" in result.output
+    assert "progresso parcial neste tópico foi salvo" in result.output
+    assert sample_curriculum.topics[0].status == TopicStatus.IN_PROGRESS
+    assert sample_curriculum.topics[0].key_takeaways == ["Namespaces", "Cgroups"]
+    mock_store.save_curriculum.assert_called_once_with(sample_curriculum)

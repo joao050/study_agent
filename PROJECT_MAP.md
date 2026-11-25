@@ -44,9 +44,9 @@ study-agent/
 ## 3. Mapa por Funcionalidade (Se for X, mexa em Y)
 | Funcionalidade | Arquivo : Função / Classe |
 | :--- | :--- |
-| Comandos de Terminal & Telas | `study_agent/cli.py` |
-| Configuração de Provedores & Chaves | `study_agent/config.py` |
-| Chamadas unificadas de LLM (Prompt/JSON) | `study_agent/core/llm_client.py` |
+| Comandos de Terminal & Telas | `study_agent/cli.py` (`render_llm_error`, comandos Typer) |
+| Configuração de Provedores & Chaves | `study_agent/config.py` (`Settings`: chaves, retries e timeouts) |
+| Chamadas unificadas de LLM (Prompt/JSON) | `study_agent/core/llm_client.py` (`LLMClient`, `LLMConnectionError`, `LLMAuthenticationError`) |
 | Perguntas de diagnóstico & cálculo de nível | `study_agent/core/diagnostician.py` |
 | Montagem da árvore de estudos & tópicos | `study_agent/core/curriculum_gen.py` |
 | Explicações didáticas, analogias Feynman | `study_agent/core/teacher.py` |

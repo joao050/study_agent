@@ -18,6 +18,7 @@ from study_agent.models.curriculum import (
     ErrorDebugResolution,
     GuidedLab,
     LabMission,
+    RecallRecord,
     Topic,
     TopicStatus,
 )
@@ -629,3 +630,80 @@ def test_windows_wrapper_and_packaging_entrypoints():
     readme_text = readme_file.read_text(encoding="utf-8")
     assert "Set-ExecutionPolicy" in readme_text
     assert "study-agent.bat" in readme_text or ".\\study-agent" in readme_text
+
+
+def test_cli_export_command_generates_markdown_and_anki(
+    tmp_path,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa comando CLI 'export' gerando arquivos Markdown e Anki em diretório customizado."""
+    sample_curriculum.topics[0].status = TopicStatus.MASTERED
+    sample_curriculum.topics[0].mastery_score = 90.0
+    sample_curriculum.topics[0].key_takeaways = ["Isolamento por namespaces"]
+    sample_curriculum.topics[0].recall_history = [
+        RecallRecord(
+            question="Como containers isolam processos?",
+            student_answer="Usando namespaces do kernel.",
+            expected_concepts=["Namespaces", "Cgroups"],
+            feedback="Ótimo!",
+            score=90.0,
+        )
+    ]
+
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        result = runner.invoke(app, ["export", "--output-dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "Material de Revisão Exportado com Sucesso" in result.output
+        assert "2 cartões" in result.output
+
+        generated_md = list(tmp_path.glob("resumo_*.md"))
+        generated_anki = list(tmp_path.glob("anki_*.txt"))
+        assert len(generated_md) == 1
+        assert len(generated_anki) == 1
+
+
+def test_cli_export_in_progress_hint_and_flag(
+    tmp_path,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa dica de --in-progress quando não há tópicos MASTERED e exportação com a flag."""
+    sample_curriculum.topics[0].status = TopicStatus.IN_PROGRESS
+    sample_curriculum.topics[0].key_takeaways = ["Em andamento"]
+
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        # Sem flag --in-progress: avisa e sugere a flag
+        res_warn = runner.invoke(app, ["export", "--output-dir", str(tmp_path)])
+        assert res_warn.exit_code == 0
+        assert "--in-progress" in res_warn.output
+
+        # Com flag --in-progress: exporta normalmente
+        res_ok = runner.invoke(
+            app, ["export", "--in-progress", "--format", "markdown", "--output-dir", str(tmp_path)]
+        )
+        assert res_ok.exit_code == 0
+        assert len(list(tmp_path.glob("resumo_*.md"))) == 1
+
+
+def test_cli_export_invalid_format_returns_error_code(
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Verifica retorno exit_code=1 quando formato desconhecido é informado."""
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        res = runner.invoke(app, ["export", "--format", "formato_invalido"])
+        assert res.exit_code == 1
+        assert "Formato inválido" in res.output

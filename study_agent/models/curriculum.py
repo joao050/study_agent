@@ -111,6 +111,19 @@ class ActiveRecallEvaluation(BaseModel):
     )
 
 
+class RecallRecord(BaseModel):
+    """Registro histórico de uma pergunta e resposta de Active Recall para revisão e exportação."""
+    question: str = Field(description="Pergunta aberta formulada na sessão")
+    student_answer: str = Field(default="", description="Resposta fornecida pelo estudante")
+    expected_concepts: List[str] = Field(
+        default_factory=list,
+        description="Conceitos-chave esperados como referência",
+    )
+    feedback: str = Field(default="", description="Comentário avaliativo do professor")
+    score: float = Field(default=0.0, ge=0.0, le=100.0, description="Nota obtida (0 a 100)")
+    recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Topic(BaseModel):
     """Unidade atômica de aprendizado dentro de uma trilha."""
     id: str = Field(description="Identificador único (ex: 'mod1_topico01' ou uuid)")
@@ -149,6 +162,10 @@ class Topic(BaseModel):
         default=0,
         ge=0,
         description="Quantidade de missões práticas concluídas no laboratório guiado",
+    )
+    recall_history: List[RecallRecord] = Field(
+        default_factory=list,
+        description="Histórico de avaliações de Active Recall realizadas neste tópico",
     )
 
 

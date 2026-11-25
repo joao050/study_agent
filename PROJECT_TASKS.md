@@ -1,20 +1,14 @@
 # PROJECT_TASKS.md — Registro Vivo de Tarefas (AI Study Agent)
 
 ## 1. Fase Atual
-- **Fase:** Fase 2 em Andamento 🚀 (Pedagogia Guiada, Resiliência & Ergonomia)
-- **Objetivo:** Elevar a robustez de rede, ergonomia no Windows e experiência prática de laboratório com debugging em tempo real.
+- **Fase:** Fase 2 Concluída! 🎉 (Pedagogia Guiada, Resiliência, Ergonomia & Exportação)
+- **Objetivo:** Todas as entregas das Fases 1 e 2 foram concluídas com 100% dos testes aprovados.
 
 ## 2. Em Andamento
-- Nenhuma no momento (`#TASK-11` recém-concluída; próxima da fila: `#TASK-12`).
+- Nenhuma no momento (Fase 2 finalizada; Fase 3 planejada no backlog futuro).
 
-## 3. Planejadas (Backlog — Fase 2: Pedagogia Guiada, Resiliência & Ergonomia)
-
----
-
-### 🔹 `#TASK-12` — Exportação de Resumos de Sessão (Markdown & Anki Flashcards)
-- **Status:** `[Planejado]`
-- **Áreas:** `study_agent/core/`, `study_agent/cli.py`
-- **Descrição:** Gerar resumos estruturados dos tópicos dominados em `.md` e cartões de perguntas e respostas prontos para importação no Anki (estudo/revisão offline).
+## 3. Planejadas (Backlog — Fase 2: Concluído)
+- Todas as tarefas da Fase 2 (`#TASK-09` a `#TASK-12`) foram entregues! ✅
 
 ---
 
@@ -26,6 +20,7 @@
 ---
 
 ## 5. Concluídas
+- [x] `#TASK-12` | 25/11/2026 | Exportador de resumos Markdown (frontmatter + Mermaid + details de Active Recall) e decks TSV Anki 2.1.54+ com histórico RecallRecord e comando CLI export | `study_agent/core/exporter.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/config.py`, `study_agent/cli.py`, `.gitignore`, `README.md`, `tests/test_exporter.py`, `tests/test_cli.py`
 - [x] `#TASK-11` | 25/11/2026 | Ergonomia de execução no Windows (wrapper study-agent.bat com UTF-8, pyproject.toml, __main__.py, instruções portáteis na CLI e README.md com guia Set-ExecutionPolicy) | `study-agent.bat`, `pyproject.toml`, `study_agent/__main__.py`, `study_agent/cli.py`, `requirements.txt`, `README.md`, `tests/test_cli.py`
 - [x] `#TASK-10` | 25/11/2026 | Modo Laboratório Guiado passo a passo (GuidedLab/LabMission) e Assistente de Debugging em tempo real (debug_error + opção [E] multilinha na CLI) com testes | `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/core/teacher.py`, `study_agent/cli.py`, `tests/test_models.py`, `tests/test_teacher.py`, `tests/test_cli.py`
 - [x] `#TASK-09` | 25/11/2026 | Resiliência de conexão no LLMClient (retries com backoff exponencial + jitter, distinção 503/429 vs 401) e tratamento gracioso com painéis Rich e salvamento parcial na CLI | `study_agent/core/llm_client.py`, `study_agent/core/__init__.py`, `study_agent/config.py`, `study_agent/cli.py`, `.env.example`, `tests/test_llm_client.py`, `tests/test_cli.py`
@@ -54,3 +49,4 @@
 - **Decisão 13 (25/11/2026):** Implementação de resiliência em duas camadas: no `LLMClient`, loop explícito de retry com *backoff exponencial + jitter* apenas para falhas transitórias (`503`, `429`, timeouts) e *fail-fast* imediato para credenciais inválidas (`401/403`); na `CLI`, renderização amigável via `render_llm_error` sem stack traces brutos e persistência automática de progresso parcial caso a rede caia no Active Recall.
 - **Decisão 14 (25/11/2026):** Modo Laboratório Guiado estruturado via *Scaffolding* com `GuidedLab` e `LabMission` (checkpoints explícitos `[P/E/D/A]`), somado ao método `Teacher.debug_error` sensível ao sistema operacional do aluno e captura multilinha de stack traces na opção `[E]` da CLI.
 - **Decisão 15 (25/11/2026):** Ergonomia multiplataforma e Windows garantida em 3 camadas: wrapper `study-agent.bat` (força UTF-8 e localiza `.venv` sem depender de `ExecutionPolicy` do PowerShell), empacotamento PEP 621 via `pyproject.toml` (`study-agent` entrypoint) + `__main__.py`, e padronização das mensagens da CLI para `python -m study_agent.cli`.
+- **Decisão 16 (25/11/2026):** Exportação offline determinística via `StudyExporter` (zero custo de API na hora de exportar): persistência de `RecallRecord` em cada tópico avaliado, geração de guia `.md` com blocos retráteis `<details>` para revisão ativa no Obsidian/GitHub, e geração de deck `.txt` com cabeçalhos nativos do Anki 2.1.54+ (`#separator:tab`, `#html:true`, `#deck`, `#tags column:3`).

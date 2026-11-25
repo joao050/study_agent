@@ -12,6 +12,7 @@ from study_agent import __version__
 from study_agent.core.curriculum_gen import CurriculumGenerator
 from study_agent.core.diagnostician import Diagnostician
 from study_agent.core.evaluator import Evaluator
+from study_agent.core.exporter import StudyExporter
 from study_agent.core.llm_client import (
     LLMAuthenticationError,
     LLMClientError,
@@ -667,8 +668,8 @@ def study() -> None:
         )
     )
 
-    # Atualiza status do tópico e salva trilha
-    evaluator.update_topic_mastery(next_topic, evaluation)
+    # Atualiza status do tópico, registra histórico de Active Recall e salva trilha
+    evaluator.update_topic_mastery(next_topic, evaluation, question=recall_question)
     curriculum.update_topic_statuses()
     store.save_curriculum(curriculum)
 
@@ -721,6 +722,97 @@ def students(
     console.print(
         "[dim]Para alternar a sessão ativa: python -m study_agent.cli students --switch <ID> "
         "(ou .\\study-agent students --switch <ID>)[/dim]"
+    )
+
+
+@app.command()
+def export(
+    format: str = typer.Option(
+        "both",
+        "--format",
+        "-f",
+        help="Formato de exportação: 'both' (padrão), 'markdown' ou 'anki'",
+    ),
+    include_in_progress: bool = typer.Option(
+        False,
+        "--in-progress",
+        "-i",
+        help="Inclui também tópicos em andamento (além dos dominados)",
+    ),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "--output-dir",
+        "-o",
+        help="Diretório de saída dos arquivos (padrão: exports/)",
+    ),
+) -> None:
+    """Exporta resumos em Markdown e flashcards Anki dos tópicos estudados."""
+    store = get_store()
+    student, curriculum = store.load_active_session()
+
+    if not student or not curriculum:
+        console.print(
+            "[yellow]⚠️ Nenhuma sessão ativa encontrada. "
+            "Execute 'python -m study_agent.cli init' (ou '.\\study-agent init') primeiro.[/yellow]"
+        )
+        return
+
+    normalized_fmt = format.strip().lower()
+    if normalized_fmt not in StudyExporter.VALID_FORMATS:
+        console.print(
+            f"[red]❌ Formato inválido '{format}'. Escolha entre: both, markdown ou anki.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    exporter = StudyExporter(base_dir=output_dir) if output_dir else StudyExporter()
+    eligible = exporter.select_exportable_topics(
+        curriculum, include_in_progress=include_in_progress
+    )
+
+    if not eligible:
+        has_in_progress = any(t.status == TopicStatus.IN_PROGRESS for t in curriculum.topics)
+        extra_tip = (
+            "\n💡 Dica: Use a flag [bold cyan]--in-progress[/bold cyan] para exportar tópicos já iniciados."
+            if has_in_progress and not include_in_progress
+            else ""
+        )
+        console.print(
+            Panel(
+                "[yellow]Ainda não há tópicos dominados nesta trilha para exportar.[/yellow]\n"
+                "Conclua ao menos um tópico com [bold cyan]python -m study_agent.cli study[/bold cyan]."
+                f"{extra_tip}",
+                title="📦 Exportação de Resumos",
+                border_style="yellow",
+            )
+        )
+        return
+
+    result = exporter.export_session(
+        student=student,
+        curriculum=curriculum,
+        output_dir=output_dir,
+        fmt=normalized_fmt,
+        include_in_progress=include_in_progress,
+    )
+
+    details = [
+        f"• [bold]Estudante / Trilha:[/bold] {student.name} — {curriculum.subject}",
+        f"• [bold]Tópicos exportados:[/bold] [green]{result.topics_exported}[/green]",
+    ]
+    if result.markdown_path:
+        details.append(f"• [bold]Resumo Markdown:[/bold] [cyan]{result.markdown_path}[/cyan]")
+    if result.anki_path:
+        details.append(
+            f"• [bold]Deck Anki ({result.flashcards_generated} cartões):[/bold] [cyan]{result.anki_path}[/cyan]\n"
+            "  [dim]No Anki: Arquivo ➔ Importar ➔ selecione o arquivo .txt gerado (separador e deck automáticos).[/dim]"
+        )
+
+    console.print(
+        Panel(
+            "\n".join(details),
+            title="✅ Material de Revisão Exportado com Sucesso",
+            border_style="green",
+        )
     )
 
 

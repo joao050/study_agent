@@ -99,6 +99,7 @@ study-agent study
 | `python -m study_agent.cli study` | `.\study-agent study` | Inicia/retoma a aula do próximo tópico (Feynman, Técnico, Prático ou Laboratório Guiado). |
 | `python -m study_agent.cli status` | `.\study-agent status` | Exibe o painel de progresso geral e tabela de tópicos. |
 | `python -m study_agent.cli map` | `.\study-agent map` | Renderiza a árvore conceitual da trilha (`--mermaid` para código Mermaid). |
+| `python -m study_agent.cli export` | `.\study-agent export` | Exporta guia Markdown (`.md`) e flashcards Anki (`.txt`) na pasta `exports/`. |
 | `python -m study_agent.cli students` | `.\study-agent students` | Lista perfis salvos e alterna entre trilhas (`--switch <ID>`). |
 | `python -m study_agent.cli version` | `.\study-agent version` | Exibe a versão atual instalada. |
 

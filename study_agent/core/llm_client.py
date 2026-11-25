@@ -1,8 +1,10 @@
-"""Cliente unificado de LLM usando LiteLLM com suporte a Structured Outputs."""
+"""Cliente unificado de LLM usando LiteLLM com suporte a Structured Outputs e resiliência."""
 
 import json
+import random
 import re
-from typing import Any, Dict, List, Optional, Type, TypeVar
+import time
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 import litellm
 from pydantic import BaseModel, ValidationError
@@ -11,9 +13,33 @@ from study_agent.config import Settings, get_settings
 
 T = TypeVar("T", bound=BaseModel)
 
+MAX_BACKOFF_DELAY_SECONDS = 30.0
+
 
 class LLMClientError(Exception):
     """Exceção base para falhas de comunicação ou execução do LLM."""
+
+    pass
+
+
+class LLMConnectionError(LLMClientError):
+    """Exceção levantada após esgotar retentativas em falhas transitórias (503, 429, timeout, rede)."""
+
+    def __init__(
+        self,
+        message: str,
+        attempts: int = 1,
+        status_code: Optional[int] = None,
+        is_rate_limit: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.attempts = attempts
+        self.status_code = status_code
+        self.is_rate_limit = is_rate_limit
+
+
+class LLMAuthenticationError(LLMClientError):
+    """Exceção levantada quando credenciais/chaves de API estão ausentes ou inválidas (401/403)."""
 
     pass
 
@@ -27,13 +53,19 @@ class LLMResponseValidationError(LLMClientError):
 class LLMClient:
     """Cliente unificado para múltiplos provedores (Gemini, OpenAI, Claude, Ollama) via LiteLLM."""
 
-    def __init__(self, settings: Optional[Settings] = None) -> None:
+    def __init__(
+        self,
+        settings: Optional[Settings] = None,
+        on_retry: Optional[Callable[[int, int, float, Exception], None]] = None,
+    ) -> None:
         self.settings = settings or get_settings()
+        self.on_retry = on_retry
         self._configure_litellm()
 
     def _configure_litellm(self) -> None:
         """Ajusta configurações e chaves de provedor para a biblioteca LiteLLM."""
         litellm.telemetry = False
+        litellm.suppress_debug_info = True
 
         if self.settings.gemini_api_key:
             litellm.api_key = self.settings.gemini_api_key
@@ -49,6 +81,7 @@ class LLMClient:
             "model": model or self.settings.llm_model,
             "temperature": temperature if temperature is not None else self.settings.temperature,
             "max_tokens": max_tokens or self.settings.max_tokens,
+            "timeout": self.settings.llm_timeout,
         }
 
         # Injeção de credenciais específicas por provedor
@@ -63,6 +96,113 @@ class LLMClient:
             kwargs["api_base"] = self.settings.ollama_api_base
 
         return kwargs
+
+    @staticmethod
+    def _is_authentication_error(exc: Exception) -> bool:
+        """Identifica erros permanentes de autenticação ou chave de API inválida."""
+        if isinstance(exc, litellm.AuthenticationError):
+            return True
+        status_code = getattr(exc, "status_code", None)
+        if status_code in (401, 403):
+            return True
+        msg = str(exc).lower()
+        auth_markers = (
+            "api_key_invalid",
+            "invalid api key",
+            "authenticationerror",
+            "unauthorized",
+            "invalid x-api-key",
+        )
+        return any(marker in msg for marker in auth_markers)
+
+    @classmethod
+    def _is_retryable_error(cls, exc: Exception) -> bool:
+        """Identifica falhas transitórias elegíveis para retry com backoff exponencial."""
+        if cls._is_authentication_error(exc):
+            return False
+
+        if isinstance(
+            exc,
+            (
+                litellm.ServiceUnavailableError,
+                litellm.RateLimitError,
+                litellm.Timeout,
+                litellm.InternalServerError,
+                litellm.APIConnectionError,
+                TimeoutError,
+                ConnectionError,
+            ),
+        ):
+            return True
+
+        status_code = getattr(exc, "status_code", None)
+        if status_code in (408, 429, 500, 502, 503, 504):
+            return True
+
+        msg = str(exc).lower()
+        transient_markers = (
+            "503",
+            "429",
+            "502",
+            "504",
+            "service unavailable",
+            "unavailable",
+            "overloaded",
+            "rate limit",
+            "ratelimit",
+            "resource_exhausted",
+            "timed out",
+            "timeout",
+        )
+        return any(marker in msg for marker in transient_markers)
+
+    def _completion_with_retry(
+        self,
+        messages: List[Dict[str, str]],
+        error_prefix: str = "Falha ao chamar o LLM",
+        **kwargs: Any,
+    ) -> Any:
+        """Executa chamada ao LiteLLM com política de retry, backoff exponencial e jitter."""
+        max_retries = max(0, self.settings.llm_num_retries)
+        base_delay = max(0.0, self.settings.llm_retry_base_delay)
+
+        for attempt in range(max_retries + 1):
+            try:
+                return litellm.completion(messages=messages, **kwargs)
+            except Exception as exc:
+                if self._is_authentication_error(exc):
+                    raise LLMAuthenticationError(
+                        f"{error_prefix}: credenciais ou chave de API inválidas ({exc})"
+                    ) from exc
+
+                if self._is_retryable_error(exc):
+                    if attempt < max_retries:
+                        backoff = base_delay * (2**attempt)
+                        jitter = random.uniform(0.0, 0.25 * base_delay) if base_delay > 0 else 0.0
+                        delay = min(backoff + jitter, MAX_BACKOFF_DELAY_SECONDS)
+                        if self.on_retry:
+                            self.on_retry(attempt + 1, max_retries, delay, exc)
+                        time.sleep(delay)
+                        continue
+
+                    status_code = getattr(exc, "status_code", None)
+                    msg_lower = str(exc).lower()
+                    is_rate_limit = (
+                        isinstance(exc, litellm.RateLimitError)
+                        or status_code == 429
+                        or "429" in msg_lower
+                        or "rate limit" in msg_lower
+                        or "resource_exhausted" in msg_lower
+                    )
+                    total_attempts = max_retries + 1
+                    raise LLMConnectionError(
+                        f"{error_prefix} após {total_attempts} tentativa(s): {exc}",
+                        attempts=total_attempts,
+                        status_code=status_code,
+                        is_rate_limit=is_rate_limit,
+                    ) from exc
+
+                raise LLMClientError(f"{error_prefix}: {exc}") from exc
 
     def generate(
         self,
@@ -79,12 +219,12 @@ class LLMClient:
         messages.append({"role": "user", "content": prompt})
 
         kwargs = self._build_kwargs(model=model, temperature=temperature, max_tokens=max_tokens)
-
-        try:
-            response = litellm.completion(messages=messages, **kwargs)
-            return response.choices[0].message.content or ""
-        except Exception as exc:
-            raise LLMClientError(f"Falha ao chamar o LLM: {str(exc)}") from exc
+        response = self._completion_with_retry(
+            messages=messages,
+            error_prefix="Falha ao chamar o LLM",
+            **kwargs,
+        )
+        return response.choices[0].message.content or ""
 
     def generate_structured(
         self,
@@ -123,16 +263,24 @@ class LLMClient:
         kwargs["response_format"] = {"type": "json_object"}
 
         try:
-            response = litellm.completion(messages=messages, **kwargs)
+            response = self._completion_with_retry(
+                messages=messages,
+                error_prefix="Falha ao chamar o LLM para saída estruturada",
+                **kwargs,
+            )
             raw_text = response.choices[0].message.content or ""
-        except Exception as exc:
-            # Tenta sem response_format caso o provedor/modelo não suporte a flag
-            try:
-                kwargs.pop("response_format", None)
-                response = litellm.completion(messages=messages, **kwargs)
-                raw_text = response.choices[0].message.content or ""
-            except Exception as inner_exc:
-                raise LLMClientError(f"Falha ao chamar o LLM para saída estruturada: {str(inner_exc)}") from inner_exc
+        except (LLMConnectionError, LLMAuthenticationError):
+            # Erros de rede/sobrecarga (já retentados) ou de autenticação propagam diretamente
+            raise
+        except LLMClientError:
+            # Tenta sem response_format caso o provedor/modelo não suporte a flag json_object
+            kwargs.pop("response_format", None)
+            response = self._completion_with_retry(
+                messages=messages,
+                error_prefix="Falha ao chamar o LLM para saída estruturada",
+                **kwargs,
+            )
+            raw_text = response.choices[0].message.content or ""
 
         cleaned_json = self._extract_clean_json(raw_text)
 

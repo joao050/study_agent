@@ -12,6 +12,12 @@ from study_agent import __version__
 from study_agent.core.curriculum_gen import CurriculumGenerator
 from study_agent.core.diagnostician import Diagnostician
 from study_agent.core.evaluator import Evaluator
+from study_agent.core.llm_client import (
+    LLMAuthenticationError,
+    LLMClientError,
+    LLMConnectionError,
+    LLMResponseValidationError,
+)
 from study_agent.core.teacher import Teacher
 from study_agent.models.curriculum import ExplanationStyle, Topic, TopicStatus
 from study_agent.models.student import KnowledgeLevel, StudentProfile, StudyPace
@@ -28,6 +34,56 @@ console = Console()
 def get_store() -> SessionStore:
     """Retorna uma instância da camada de persistência."""
     return SessionStore()
+
+
+def render_llm_error(exc: LLMClientError) -> None:
+    """Exibe um painel visual amigável no terminal quando ocorre uma falha no provedor de LLM."""
+    if isinstance(exc, LLMAuthenticationError):
+        console.print(
+            Panel(
+                "[bold red]Não foi possível autenticar no provedor de IA.[/bold red]\n\n"
+                "Verifique se a chave de API está preenchida corretamente no arquivo [bold cyan].env[/bold cyan] "
+                "(ex: [cyan]GEMINI_API_KEY[/cyan], [cyan]OPENAI_API_KEY[/cyan] ou [cyan]ANTHROPIC_API_KEY[/cyan]) "
+                "e se corresponde ao [cyan]LLM_PROVIDER[/cyan] configurado.",
+                title="🔑 Erro de Credenciais / API Key",
+                border_style="red",
+            )
+        )
+    elif isinstance(exc, LLMConnectionError):
+        reason = (
+            "limite de requisições do plano gratuito/atual ([bold]429 Rate Limit[/bold])"
+            if exc.is_rate_limit
+            else "alta demanda nos servidores ou oscilação de rede ([bold]503 Service Unavailable / Timeout[/bold])"
+        )
+        console.print(
+            Panel(
+                f"[bold yellow]O serviço de IA não respondeu mesmo após {exc.attempts} tentativa(s) automática(s).[/bold yellow]\n\n"
+                f"• [bold]Causa provável:[/bold] {reason}.\n"
+                "• [bold]O que fazer:[/bold] Aguarde alguns segundos e execute o comando novamente, "
+                "ou altere [cyan]LLM_MODEL[/cyan] no arquivo [cyan].env[/cyan].",
+                title="🌐 Serviço de IA Temporariamente Indisponível",
+                border_style="yellow",
+            )
+        )
+    elif isinstance(exc, LLMResponseValidationError):
+        console.print(
+            Panel(
+                "[bold yellow]O modelo de IA retornou uma resposta fora do formato estruturado esperado.[/bold yellow]\n\n"
+                "• [bold]O que fazer:[/bold] Execute o comando novamente para gerar uma nova resposta limpa.",
+                title="⚠️ Resposta Inesperada do Modelo",
+                border_style="yellow",
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                f"[bold red]Ocorreu uma falha ao comunicar com o modelo de IA:[/bold red]\n"
+                f"[dim]{exc}[/dim]\n\n"
+                "Verifique sua conexão e as configurações de modelo no arquivo [cyan].env[/cyan].",
+                title="❌ Falha de Comunicação com o Tutor IA",
+                border_style="red",
+            )
+        )
 
 
 @app.command()
@@ -103,46 +159,50 @@ def init(
     )
 
     diagnostician = Diagnostician()
-    with console.status("[bold cyan]Elaborando perguntas de diagnóstico pedagógico...[/bold cyan]"):
-        questions = diagnostician.generate_questions(target_subject=target_subject, count=3)
+    curriculum_gen = CurriculumGenerator()
+    try:
+        with console.status("[bold cyan]Elaborando perguntas de diagnóstico pedagógico...[/bold cyan]"):
+            questions = diagnostician.generate_questions(target_subject=target_subject, count=3)
 
-    student_answers = []
-    for idx, q in enumerate(questions, start=1):
+        student_answers = []
+        for idx, q in enumerate(questions, start=1):
+            console.print(
+                Panel(
+                    f"[bold cyan]Pergunta {idx}/3[/bold cyan] [dim]({q.topic_focus} • Nível: {q.difficulty.value})[/dim]\n\n"
+                    f"[bold]{q.question}[/bold]",
+                    border_style="cyan",
+                )
+            )
+            answer = Prompt.ask("Sua resposta (pode ser concisa ou 'não sei')")
+            student_answers.append(answer)
+
+        with console.status("[bold yellow]Avaliando suas respostas e calibrando seu nível...[/bold yellow]"):
+            report = diagnostician.evaluate_answers(
+                target_subject=target_subject,
+                questions=questions,
+                student_answers=student_answers,
+            )
+
+        profile.current_level = report.assessed_level
+        profile.diagnostic_history = report.answers
+
         console.print(
             Panel(
-                f"[bold cyan]Pergunta {idx}/3[/bold cyan] [dim]({q.topic_focus} • Nível: {q.difficulty.value})[/dim]\n\n"
-                f"[bold]{q.question}[/bold]",
-                border_style="cyan",
+                f"[bold green]📊 Resultado do Diagnóstico:[/bold green]\n"
+                f"• Nível Identificado: [bold cyan]{report.assessed_level.value.upper()}[/bold cyan]\n"
+                f"• Pontuação de Partida: [bold]{report.overall_score}/100[/bold]\n"
+                f"• Síntese: [italic]{report.summary_feedback}[/italic]\n"
+                f"• Lacunas a Cobrir: [dim]{', '.join(report.learning_gaps) if report.learning_gaps else 'Nenhuma'}[/dim]",
+                border_style="green",
             )
         )
-        answer = Prompt.ask("Sua resposta (pode ser concisa ou 'não sei')")
-        student_answers.append(answer)
 
-    with console.status("[bold yellow]Avaliando suas respostas e calibrando seu nível...[/bold yellow]"):
-        report = diagnostician.evaluate_answers(
-            target_subject=target_subject,
-            questions=questions,
-            student_answers=student_answers,
-        )
-
-    profile.current_level = report.assessed_level
-    profile.diagnostic_history = report.answers
-
-    console.print(
-        Panel(
-            f"[bold green]📊 Resultado do Diagnóstico:[/bold green]\n"
-            f"• Nível Identificado: [bold cyan]{report.assessed_level.value.upper()}[/bold cyan]\n"
-            f"• Pontuação de Partida: [bold]{report.overall_score}/100[/bold]\n"
-            f"• Síntese: [italic]{report.summary_feedback}[/italic]\n"
-            f"• Lacunas a Cobrir: [dim]{', '.join(report.learning_gaps) if report.learning_gaps else 'Nenhuma'}[/dim]",
-            border_style="green",
-        )
-    )
-
-    # Geração do Currículo
-    curriculum_gen = CurriculumGenerator()
-    with console.status("[bold green]Construindo sua trilha de aprendizado personalizada...[/bold green]"):
-        curriculum = curriculum_gen.generate(student_profile=profile, diagnostic_report=report)
+        # Geração do Currículo
+        with console.status("[bold green]Construindo sua trilha de aprendizado personalizada...[/bold green]"):
+            curriculum = curriculum_gen.generate(student_profile=profile, diagnostic_report=report)
+    except LLMClientError as exc:
+        render_llm_error(exc)
+        raise typer.Exit(code=1)
 
     # Persistência
     store = get_store()
@@ -280,32 +340,43 @@ def study() -> None:
     chosen_style = style_map[style_opt]
 
     teacher = Teacher()
-    with console.status("[bold green]O professor está preparando sua explicação didática...[/bold green]"):
-        explanation = teacher.explain_topic(
-            topic=next_topic,
-            style=chosen_style,
-            student_context=f"Aluno nível {student.current_level.value}",
-        )
+    try:
+        with console.status("[bold green]O professor está preparando sua explicação didática...[/bold green]"):
+            explanation = teacher.explain_topic(
+                topic=next_topic,
+                style=chosen_style,
+                student_context=f"Aluno nível {student.current_level.value}",
+            )
+    except LLMClientError as exc:
+        render_llm_error(exc)
+        raise typer.Exit(code=1)
 
     console.print("\n" + "=" * 60 + "\n")
     console.print(Markdown(explanation))
     console.print("\n" + "=" * 60 + "\n")
 
-    # Extrai takeaways para fixação
-    with console.status("[dim]Sintetizando pontos-chave...[/dim]"):
-        takeaways = teacher.summarize_key_takeaways(next_topic, explanation)
-    next_topic.key_takeaways = takeaways
+    # Extrai takeaways para fixação (degradação graciosa em caso de oscilação)
+    takeaways = next_topic.key_takeaways
+    try:
+        with console.status("[dim]Sintetizando pontos-chave...[/dim]"):
+            takeaways = teacher.summarize_key_takeaways(next_topic, explanation)
+        next_topic.key_takeaways = takeaways
+    except LLMClientError:
+        console.print("[dim yellow]⚠️ Síntese de pontos-chave ignorada devido a oscilação momentânea da rede.[/dim yellow]")
 
-    # Ciclo de tirar dúvidas
+    # Ciclo de tirar dúvidas (resiliente: falha pontual não derruba a aula)
     while Confirm.ask("Ficou com alguma dúvida ou gostaria de um exemplo extra?"):
         doubt = Prompt.ask("Digite sua dúvida")
-        with console.status("[bold yellow]O professor está respondendo sua dúvida...[/bold yellow]"):
-            answer = teacher.answer_doubt(
-                topic=next_topic,
-                student_question=doubt,
-                previous_explanation=explanation,
-            )
-        console.print(Panel(Markdown(answer), title="💡 Resposta do Professor", border_style="yellow"))
+        try:
+            with console.status("[bold yellow]O professor está respondendo sua dúvida...[/bold yellow]"):
+                answer = teacher.answer_doubt(
+                    topic=next_topic,
+                    student_question=doubt,
+                    previous_explanation=explanation,
+                )
+            console.print(Panel(Markdown(answer), title="💡 Resposta do Professor", border_style="yellow"))
+        except LLMClientError as exc:
+            render_llm_error(exc)
 
     # Checagem ativa (Active Recall)
     console.print(
@@ -318,20 +389,27 @@ def study() -> None:
     )
 
     evaluator = Evaluator()
-    with console.status("[bold magenta]Elaborando pergunta de retenção ativa...[/bold magenta]"):
-        recall_question = evaluator.generate_active_recall_question(next_topic, key_takeaways=takeaways)
+    try:
+        with console.status("[bold magenta]Elaborando pergunta de retenção ativa...[/bold magenta]"):
+            recall_question = evaluator.generate_active_recall_question(next_topic, key_takeaways=takeaways)
 
-    console.print(
-        Panel(
-            f"[bold]{recall_question.question}[/bold]\n\n"
-            f"[dim]💡 Dica: {recall_question.hint or 'Explique o porquê com clareza.'}[/dim]",
-            border_style="magenta",
+        console.print(
+            Panel(
+                f"[bold]{recall_question.question}[/bold]\n\n"
+                f"[dim]💡 Dica: {recall_question.hint or 'Explique o porquê com clareza.'}[/dim]",
+                border_style="magenta",
+            )
         )
-    )
 
-    student_answer = Prompt.ask("Sua resposta")
-    with console.status("[bold cyan]Avaliando seu domínio conceitual...[/bold cyan]"):
-        evaluation = evaluator.evaluate_active_recall(recall_question, student_answer)
+        student_answer = Prompt.ask("Sua resposta")
+        with console.status("[bold cyan]Avaliando seu domínio conceitual...[/bold cyan]"):
+            evaluation = evaluator.evaluate_active_recall(recall_question, student_answer)
+    except LLMClientError as exc:
+        next_topic.status = TopicStatus.IN_PROGRESS
+        store.save_curriculum(curriculum)
+        render_llm_error(exc)
+        console.print("[dim]💾 Seu progresso parcial neste tópico foi salvo automaticamente.[/dim]")
+        raise typer.Exit(code=1)
 
     # Exibe resultado da avaliação
     status_color = "green" if evaluation.is_passing else "yellow"

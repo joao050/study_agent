@@ -1,23 +1,13 @@
 # PROJECT_TASKS.md — Registro Vivo de Tarefas (AI Study Agent)
 
 ## 1. Fase Atual
-- **Fase:** Fase 1 Concluída! 🎉 (Estrutura Base, Core Pedagógico, Persistência e CLI)
-- **Objetivo:** Todas as tarefas da Fase 1 foram entregues com 100% dos testes aprovados.
+- **Fase:** Fase 2 em Andamento 🚀 (Pedagogia Guiada, Resiliência & Ergonomia)
+- **Objetivo:** Elevar a robustez de rede, ergonomia no Windows e experiência prática de laboratório com debugging em tempo real.
 
 ## 2. Em Andamento
-- Nenhuma no momento (Fase 1 finalizada; Fase 2 a ser iniciada após alinhamento do backlog).
+- Nenhuma no momento (`#TASK-09` recém-concluída; próxima da fila: `#TASK-10`).
 
 ## 3. Planejadas (Backlog — Fase 2: Pedagogia Guiada, Resiliência & Ergonomia)
-
----
-
-### 🔹 `#TASK-09` — Resiliência de Conexão com LLM & Retries Automáticos
-- **Status:** `[Planejado]`
-- **Áreas:** `study_agent/core/llm_client.py`, `study_agent/cli.py`
-- **Origem dos Experimentos:** Durante testes manuais, picos de tráfego do Free Tier da Gemini retornaram `503 Service Unavailable`.
-- **Escopo:**
-  1. Adicionar política de retry automático com backoff exponencial (`num_retries=3`) no `LLMClient`.
-  2. Implementar tratamento gracioso de exceções no CLI, exibindo aviso visual amigável via Rich em vez de traceback bruto.
 
 ---
 
@@ -58,6 +48,7 @@
 ---
 
 ## 5. Concluídas
+- [x] `#TASK-09` | 25/11/2026 | Resiliência de conexão no LLMClient (retries com backoff exponencial + jitter, distinção 503/429 vs 401) e tratamento gracioso com painéis Rich e salvamento parcial na CLI | `study_agent/core/llm_client.py`, `study_agent/core/__init__.py`, `study_agent/config.py`, `study_agent/cli.py`, `.env.example`, `tests/test_llm_client.py`, `tests/test_cli.py`
 - [x] `#TASK-08` | 17/11/2026 | Interface CLI interativa com Typer e Rich (init, study, status, map, students, version) orquestrando core e storage com testes | `study_agent/cli.py`, `tests/test_cli.py`
 - [x] `#TASK-07` | 17/11/2026 | Camada de persistência SessionStore (gravação atômica, perfis, trilhas, sessão ativa e deleção em cascata) com testes | `study_agent/storage/session_store.py`, `study_agent/storage/__init__.py`, `study_agent/config.py`, `tests/test_session_store.py`
 - [x] `#TASK-06` | 16/11/2026 | Módulos Teacher (Feynman, técnico, prático, dúvidas, takeaways) e Evaluator (Active Recall, notas de domínio, atualização de tópicos) com testes | `study_agent/core/teacher.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `tests/test_teacher.py`, `tests/test_evaluator.py`
@@ -80,3 +71,4 @@
 - **Decisão 10 (17/11/2026):** SessionStore implementado com gravação atômica via arquivos temporários (.tmp -> replace), separação em subpastas profiles e curricula, e ponteiro current_session.json para retomada imediata do último estudo sem argumentos de CLI.
 - **Decisão 11 (17/11/2026):** Interface CLI construída com Typer e Rich, suportando fluxo conversacional com spin indicators, renderização rica de tabelas de status, visualização de mapas ASCII e Mermaid, ciclo de estudo com dúvidas ilimitadas e checagem de Active Recall.
 - **Decisão 12 (18/11/2026):** Gamificação (badges, streaks, níveis) postergada para a Fase 3 (Interface Web), onde o apelo visual e a recompensa gráfica são muito maiores. O foco da Fase 2 foi direcionado 100% para a eficácia pedagógica prática (Modo Laboratório Guiado e Debugging em tempo real), resiliência de rede e ergonomia no Windows.
+- **Decisão 13 (25/11/2026):** Implementação de resiliência em duas camadas: no `LLMClient`, loop explícito de retry com *backoff exponencial + jitter* apenas para falhas transitórias (`503`, `429`, timeouts) e *fail-fast* imediato para credenciais inválidas (`401/403`); na `CLI`, renderização amigável via `render_llm_error` sem stack traces brutos e persistência automática de progresso parcial caso a rede caia no Active Recall.

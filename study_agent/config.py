@@ -21,6 +21,11 @@ class Settings(BaseSettings):
     temperature: float = 0.7
     max_tokens: int = 2048
 
+    # Resiliência e retentativas automáticas de conexão com LLM
+    llm_num_retries: int = 3
+    llm_retry_base_delay: float = 1.0
+    llm_timeout: float = 60.0
+
     # Chaves de API de provedores suportados
     gemini_api_key: Optional[str] = None
     openai_api_key: Optional[str] = None

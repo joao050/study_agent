@@ -584,3 +584,48 @@ def test_cli_study_guided_lab_mode_with_error_checkpoint(
     assert "Assistente de Debugging em Tempo Real" in result.output
     assert sample_curriculum.topics[0].completed_lab_steps == 2
     assert "Tópico Dominado!" in result.output
+
+
+def test_cli_portable_command_hints_displayed(
+    sample_student: StudentProfile, sample_curriculum: Curriculum
+):
+    """Verifica que as instruções da CLI sugerem o comando portátil python -m study_agent.cli."""
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (None, None)
+        mock_store.list_students.return_value = [sample_student]
+        mock_store.get_current_session.return_value = (sample_student.id, sample_curriculum.id)
+        mock_get_store.return_value = mock_store
+
+        for cmd in (["status"], ["map"], ["study"], ["students"]):
+            res = runner.invoke(app, cmd)
+            assert res.exit_code == 0
+            assert "python -m study_agent.cli" in res.output
+
+
+def test_windows_wrapper_and_packaging_entrypoints():
+    """Valida existência e configuração de study-agent.bat, pyproject.toml, __main__.py e README.md."""
+    from pathlib import Path
+    import tomllib
+
+    project_root = Path(__file__).resolve().parent.parent
+
+    bat_file = project_root / "study-agent.bat"
+    assert bat_file.exists()
+    bat_content = bat_file.read_text(encoding="utf-8")
+    assert "-m study_agent.cli %*" in bat_content
+    assert ".venv\\Scripts\\python.exe" in bat_content
+
+    main_file = project_root / "study_agent" / "__main__.py"
+    assert main_file.exists()
+
+    pyproject_file = project_root / "pyproject.toml"
+    assert pyproject_file.exists()
+    pyproject_data = tomllib.loads(pyproject_file.read_text(encoding="utf-8"))
+    assert pyproject_data["project"]["scripts"]["study-agent"] == "study_agent.cli:app"
+
+    readme_file = project_root / "README.md"
+    assert readme_file.exists()
+    readme_text = readme_file.read_text(encoding="utf-8")
+    assert "Set-ExecutionPolicy" in readme_text
+    assert "study-agent.bat" in readme_text or ".\\study-agent" in readme_text

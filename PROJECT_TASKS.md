@@ -5,20 +5,9 @@
 - **Objetivo:** Elevar a robustez de rede, ergonomia no Windows e experiência prática de laboratório com debugging em tempo real.
 
 ## 2. Em Andamento
-- Nenhuma no momento (`#TASK-10` recém-concluída; próxima da fila: `#TASK-11`).
+- Nenhuma no momento (`#TASK-11` recém-concluída; próxima da fila: `#TASK-12`).
 
 ## 3. Planejadas (Backlog — Fase 2: Pedagogia Guiada, Resiliência & Ergonomia)
-
----
-
-### 🔹 `#TASK-11` — Ergonomia de Execução CLI & Entrypoint no Windows
-- **Status:** `[Planejado]`
-- **Áreas:** `study_agent/cli.py`, `study-agent.bat`, `README.md`
-- **Origem dos Experimentos:** Usuário se deparou com política de execução restrita de `.ps1` no PowerShell e comando global `study-agent` não encontrado sem ativação explícita de `.venv`.
-- **Escopo:**
-  1. Padronizar mensagens de instrução no CLI para sugerir o comando portátil `python -m study_agent.cli study`.
-  2. Adicionar script wrapper executável `study-agent.bat` para inicialização direta no Windows.
-  3. Documentar no `README.md` a resolução rápida de `Set-ExecutionPolicy` para novos usuários no Windows.
 
 ---
 
@@ -37,6 +26,7 @@
 ---
 
 ## 5. Concluídas
+- [x] `#TASK-11` | 25/11/2026 | Ergonomia de execução no Windows (wrapper study-agent.bat com UTF-8, pyproject.toml, __main__.py, instruções portáteis na CLI e README.md com guia Set-ExecutionPolicy) | `study-agent.bat`, `pyproject.toml`, `study_agent/__main__.py`, `study_agent/cli.py`, `requirements.txt`, `README.md`, `tests/test_cli.py`
 - [x] `#TASK-10` | 25/11/2026 | Modo Laboratório Guiado passo a passo (GuidedLab/LabMission) e Assistente de Debugging em tempo real (debug_error + opção [E] multilinha na CLI) com testes | `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/core/teacher.py`, `study_agent/cli.py`, `tests/test_models.py`, `tests/test_teacher.py`, `tests/test_cli.py`
 - [x] `#TASK-09` | 25/11/2026 | Resiliência de conexão no LLMClient (retries com backoff exponencial + jitter, distinção 503/429 vs 401) e tratamento gracioso com painéis Rich e salvamento parcial na CLI | `study_agent/core/llm_client.py`, `study_agent/core/__init__.py`, `study_agent/config.py`, `study_agent/cli.py`, `.env.example`, `tests/test_llm_client.py`, `tests/test_cli.py`
 - [x] `#TASK-08` | 17/11/2026 | Interface CLI interativa com Typer e Rich (init, study, status, map, students, version) orquestrando core e storage com testes | `study_agent/cli.py`, `tests/test_cli.py`
@@ -63,3 +53,4 @@
 - **Decisão 12 (18/11/2026):** Gamificação (badges, streaks, níveis) postergada para a Fase 3 (Interface Web), onde o apelo visual e a recompensa gráfica são muito maiores. O foco da Fase 2 foi direcionado 100% para a eficácia pedagógica prática (Modo Laboratório Guiado e Debugging em tempo real), resiliência de rede e ergonomia no Windows.
 - **Decisão 13 (25/11/2026):** Implementação de resiliência em duas camadas: no `LLMClient`, loop explícito de retry com *backoff exponencial + jitter* apenas para falhas transitórias (`503`, `429`, timeouts) e *fail-fast* imediato para credenciais inválidas (`401/403`); na `CLI`, renderização amigável via `render_llm_error` sem stack traces brutos e persistência automática de progresso parcial caso a rede caia no Active Recall.
 - **Decisão 14 (25/11/2026):** Modo Laboratório Guiado estruturado via *Scaffolding* com `GuidedLab` e `LabMission` (checkpoints explícitos `[P/E/D/A]`), somado ao método `Teacher.debug_error` sensível ao sistema operacional do aluno e captura multilinha de stack traces na opção `[E]` da CLI.
+- **Decisão 15 (25/11/2026):** Ergonomia multiplataforma e Windows garantida em 3 camadas: wrapper `study-agent.bat` (força UTF-8 e localiza `.venv` sem depender de `ExecutionPolicy` do PowerShell), empacotamento PEP 621 via `pyproject.toml` (`study-agent` entrypoint) + `__main__.py`, e padronização das mensagens da CLI para `python -m study_agent.cli`.

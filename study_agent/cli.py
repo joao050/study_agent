@@ -440,7 +440,8 @@ def init(
             f"✅ [bold green]Trilha criada com sucesso para {profile.name}![/bold green]\n"
             f"Assunto: [bold]{curriculum.subject}[/bold] ({len(curriculum.topics)} tópicos mapeados)\n\n"
             "Para iniciar o estudo do primeiro tópico, execute:\n"
-            "  [bold cyan]study-agent study[/bold cyan]",
+            "  [bold cyan]python -m study_agent.cli study[/bold cyan]\n"
+            "  [dim](No Windows, você também pode usar: .\\study-agent study)[/dim]",
             border_style="green",
         )
     )
@@ -455,7 +456,8 @@ def status() -> None:
     if not student or not curriculum:
         console.print(
             "[yellow]⚠️ Nenhuma sessão ativa encontrada.[/yellow]\n"
-            "Execute [bold cyan]study-agent init[/bold cyan] para começar uma nova trilha."
+            "Execute [bold cyan]python -m study_agent.cli init[/bold cyan] "
+            "[dim](ou .\\study-agent init)[/dim] para começar uma nova trilha."
         )
         return
 
@@ -504,7 +506,10 @@ def map(
     student, curriculum = store.load_active_session()
 
     if not curriculum:
-        console.print("[yellow]⚠️ Nenhuma trilha ativa encontrada. Execute 'study-agent init'.[/yellow]")
+        console.print(
+            "[yellow]⚠️ Nenhuma trilha ativa encontrada. "
+            "Execute 'python -m study_agent.cli init' (ou '.\\study-agent init').[/yellow]"
+        )
         return
 
     if mermaid:
@@ -522,7 +527,10 @@ def study() -> None:
     student, curriculum = store.load_active_session()
 
     if not student or not curriculum:
-        console.print("[yellow]⚠️ Nenhuma sessão ativa encontrada. Execute 'study-agent init' primeiro.[/yellow]")
+        console.print(
+            "[yellow]⚠️ Nenhuma sessão ativa encontrada. "
+            "Execute 'python -m study_agent.cli init' (ou '.\\study-agent init') primeiro.[/yellow]"
+        )
         return
 
     # Procura o primeiro tópico disponível ou em progresso
@@ -710,7 +718,10 @@ def students(
         table.add_row(is_active, s.id[:8], s.name, s.target_subject, s.current_level.value.title())
 
     console.print(table)
-    console.print("[dim]Para alternar a sessão ativa: study-agent students --switch <ID>[/dim]")
+    console.print(
+        "[dim]Para alternar a sessão ativa: python -m study_agent.cli students --switch <ID> "
+        "(ou .\\study-agent students --switch <ID>)[/dim]"
+    )
 
 
 if __name__ == "__main__":

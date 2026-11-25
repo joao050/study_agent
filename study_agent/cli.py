@@ -12,8 +12,20 @@ from study_agent import __version__
 from study_agent.core.curriculum_gen import CurriculumGenerator
 from study_agent.core.diagnostician import Diagnostician
 from study_agent.core.evaluator import Evaluator
+from study_agent.core.exporter import StudyExporter
+from study_agent.core.llm_client import (
+    LLMAuthenticationError,
+    LLMClientError,
+    LLMConnectionError,
+    LLMResponseValidationError,
+)
 from study_agent.core.teacher import Teacher
-from study_agent.models.curriculum import ExplanationStyle, Topic, TopicStatus
+from study_agent.models.curriculum import (
+    ErrorDebugResolution,
+    ExplanationStyle,
+    Topic,
+    TopicStatus,
+)
 from study_agent.models.student import KnowledgeLevel, StudentProfile, StudyPace
 from study_agent.storage.session_store import SessionStore
 
@@ -28,6 +40,276 @@ console = Console()
 def get_store() -> SessionStore:
     """Retorna uma instância da camada de persistência."""
     return SessionStore()
+
+
+def render_llm_error(exc: LLMClientError) -> None:
+    """Exibe um painel visual amigável no terminal quando ocorre uma falha no provedor de LLM."""
+    if isinstance(exc, LLMAuthenticationError):
+        console.print(
+            Panel(
+                "[bold red]Não foi possível autenticar no provedor de IA.[/bold red]\n\n"
+                "Verifique se a chave de API está preenchida corretamente no arquivo [bold cyan].env[/bold cyan] "
+                "(ex: [cyan]GEMINI_API_KEY[/cyan], [cyan]OPENAI_API_KEY[/cyan] ou [cyan]ANTHROPIC_API_KEY[/cyan]) "
+                "e se corresponde ao [cyan]LLM_PROVIDER[/cyan] configurado.",
+                title="🔑 Erro de Credenciais / API Key",
+                border_style="red",
+            )
+        )
+    elif isinstance(exc, LLMConnectionError):
+        reason = (
+            "limite de requisições do plano gratuito/atual ([bold]429 Rate Limit[/bold])"
+            if exc.is_rate_limit
+            else "alta demanda nos servidores ou oscilação de rede ([bold]503 Service Unavailable / Timeout[/bold])"
+        )
+        console.print(
+            Panel(
+                f"[bold yellow]O serviço de IA não respondeu mesmo após {exc.attempts} tentativa(s) automática(s).[/bold yellow]\n\n"
+                f"• [bold]Causa provável:[/bold] {reason}.\n"
+                "• [bold]O que fazer:[/bold] Aguarde alguns segundos e execute o comando novamente, "
+                "ou altere [cyan]LLM_MODEL[/cyan] no arquivo [cyan].env[/cyan].",
+                title="🌐 Serviço de IA Temporariamente Indisponível",
+                border_style="yellow",
+            )
+        )
+    elif isinstance(exc, LLMResponseValidationError):
+        console.print(
+            Panel(
+                "[bold yellow]O modelo de IA retornou uma resposta fora do formato estruturado esperado.[/bold yellow]\n\n"
+                "• [bold]O que fazer:[/bold] Execute o comando novamente para gerar uma nova resposta limpa.",
+                title="⚠️ Resposta Inesperada do Modelo",
+                border_style="yellow",
+            )
+        )
+    else:
+        console.print(
+            Panel(
+                f"[bold red]Ocorreu uma falha ao comunicar com o modelo de IA:[/bold red]\n"
+                f"[dim]{exc}[/dim]\n\n"
+                "Verifique sua conexão e as configurações de modelo no arquivo [cyan].env[/cyan].",
+                title="❌ Falha de Comunicação com o Tutor IA",
+                border_style="red",
+            )
+        )
+
+
+def _collect_multiline_error_output() -> str:
+    """Abre painel dedicado e captura saídas de erro ou stack traces de múltiplas linhas."""
+    console.print(
+        Panel(
+            "Cole abaixo a saída de erro ou [bold]stack trace[/bold] exibido no seu terminal.\n"
+            "Para enviar, pressione [bold cyan]ENTER em uma linha vazia[/bold cyan] "
+            "(ou digite [bold cyan]FIM[/bold cyan]).",
+            title="🚨 Reportar Erro / Colar Terminal",
+            border_style="red",
+        )
+    )
+    lines: list[str] = []
+    while True:
+        try:
+            line = input()
+        except EOFError:
+            break
+        if line.strip().upper() in ("FIM", "EOF"):
+            break
+        if line == "" and lines:
+            break
+        if line != "" or lines:
+            lines.append(line)
+    return "\n".join(lines).strip()
+
+
+def render_debug_resolution(resolution: ErrorDebugResolution) -> None:
+    """Renderiza o diagnóstico pedagógico e os passos de correção de um erro."""
+    steps_md = "\n".join(
+        f"{idx}. {step}" for idx, step in enumerate(resolution.fix_instructions, start=1)
+    )
+    tip_section = (
+        f"\n\n💡 **Dica de Prevenção:** {resolution.prevention_tip}"
+        if resolution.prevention_tip
+        else ""
+    )
+    body_md = (
+        f"### 🩺 O que esse erro significa\n{resolution.error_summary}\n\n"
+        f"### 🔍 Causa Raiz\n{resolution.root_cause}\n\n"
+        f"### 🛠️ Passo a Passo para Corrigir\n{steps_md}\n\n"
+        f"### 💻 Comando / Código Corrigido\n```\n{resolution.corrected_command_or_code}\n```"
+        f"{tip_section}"
+    )
+    console.print(
+        Panel(
+            Markdown(body_md),
+            title="🔧 Assistente de Debugging em Tempo Real",
+            border_style="green",
+        )
+    )
+
+
+def _handle_error_debugging_flow(
+    teacher: Teacher,
+    student: StudentProfile,
+    topic: Topic,
+    default_command: str = "",
+) -> None:
+    """Coleta comando e erro do terminal do aluno e aciona o assistente de debugging."""
+    command_attempted = Prompt.ask(
+        "💻 Qual comando ou código você tentou executar? (Enter para usar o padrão/pular)",
+        default=default_command,
+    )
+    error_output = _collect_multiline_error_output()
+    if not error_output:
+        console.print("[yellow]⚠️ Nenhuma saída de erro informada. Retornando ao estudo.[/yellow]")
+        return
+
+    try:
+        with console.status("[bold cyan]Analisando o erro e preparando a correção passo a passo...[/bold cyan]"):
+            resolution = teacher.debug_error(
+                student=student,
+                topic=topic,
+                command_attempted=command_attempted,
+                error_output=error_output,
+            )
+        render_debug_resolution(resolution)
+    except LLMClientError as exc:
+        render_llm_error(exc)
+
+
+def _run_guided_lab_flow(
+    teacher: Teacher,
+    student: StudentProfile,
+    topic: Topic,
+) -> str:
+    """Conduz uma sessão prática passo a passo com checkpoints e suporte a debugging."""
+    with console.status("[bold magenta]Montando seu laboratório prático passo a passo...[/bold magenta]"):
+        lab = teacher.generate_guided_lab(topic=topic, student=student)
+
+    prereq_line = (
+        f"\n\n[bold yellow]🔎 Checagem prévia:[/bold yellow] {lab.prerequisites_check}"
+        if lab.prerequisites_check
+        else ""
+    )
+    console.print(
+        Panel(
+            f"{lab.intro_brief}{prereq_line}",
+            title=f"🧪 Laboratório Guiado: {topic.title}",
+            border_style="magenta",
+        )
+    )
+
+    total = len(lab.missions)
+    summary_parts = [f"# {topic.title}\n\n{lab.intro_brief}"]
+
+    for mission in lab.missions:
+        hint_md = (
+            f"\n\n> 💡 **Atenção:** {mission.verification_hint}"
+            if mission.verification_hint
+            else ""
+        )
+        mission_md = (
+            f"{mission.instruction}\n\n"
+            f"**Execute / Teste:**\n```\n{mission.command_or_code}\n```\n\n"
+            f"✅ **Checkpoint esperado:** {mission.expected_outcome}{hint_md}"
+        )
+        console.print(
+            Panel(
+                Markdown(mission_md),
+                title=f"🛠️ Missão {mission.step_number}/{total}: {mission.title}",
+                border_style="cyan",
+            )
+        )
+        summary_parts.append(f"## Missão {mission.step_number}: {mission.title}\n{mission.instruction}")
+
+        abort_lab = False
+        while True:
+            console.print(
+                "  [bold green][P][/bold green] Funcionou! Próximo passo  |  "
+                "[bold red][E][/bold red] Reportar Erro / Colar Terminal  |  "
+                "[bold yellow][D][/bold yellow] Tirar dúvida  |  "
+                "[bold magenta][A][/bold magenta] Ir para Avaliação"
+            )
+            choice = Prompt.ask("Checkpoint", default="P").strip().lower()
+
+            if choice in ("p", "proximo", "próximo", "ok", ""):
+                topic.completed_lab_steps = max(topic.completed_lab_steps, mission.step_number)
+                console.print(f"[green]✔️ Missão {mission.step_number}/{total} validada![/green]")
+                break
+            if choice in ("e", "erro"):
+                _handle_error_debugging_flow(
+                    teacher=teacher,
+                    student=student,
+                    topic=topic,
+                    default_command=mission.command_or_code,
+                )
+            elif choice in ("d", "duvida", "dúvida", "y"):
+                doubt = Prompt.ask("Digite sua dúvida sobre este passo")
+                try:
+                    with console.status("[bold yellow]O professor está respondendo sua dúvida...[/bold yellow]"):
+                        answer = teacher.answer_doubt(
+                            topic=topic,
+                            student_question=doubt,
+                            previous_explanation="\n\n".join(summary_parts),
+                        )
+                    console.print(Panel(Markdown(answer), title="💡 Resposta do Professor", border_style="yellow"))
+                except LLMClientError as exc:
+                    render_llm_error(exc)
+            elif choice in ("a", "avaliar", "sair"):
+                abort_lab = True
+                break
+            else:
+                console.print("[yellow]Opção inválida. Escolha P, E, D ou A.[/yellow]")
+
+        if abort_lab:
+            break
+
+    return "\n\n".join(summary_parts)
+
+
+def _run_interactive_study_menu(
+    teacher: Teacher,
+    student: StudentProfile,
+    topic: Topic,
+    explanation: str,
+) -> None:
+    """Menu interativo pós-aula com suporte a dúvidas, reporte de erro e laboratório prático."""
+    while True:
+        console.print(
+            Panel(
+                "  [bold green][C][/bold green] Concluir estudo e ir para o Active Recall [dim](padrão)[/dim]\n"
+                "  [bold yellow][D][/bold yellow] Tirar dúvida conceitual ou pedir exemplo extra\n"
+                "  [bold red][E][/bold red] Reportar Erro / Colar saída do terminal 🚨\n"
+                "  [bold magenta][L][/bold magenta] Praticar em Laboratório Guiado passo a passo 🛠️",
+                title="🧭 Acompanhamento Prático & Dúvidas",
+                border_style="blue",
+            )
+        )
+        action = Prompt.ask("Escolha uma ação [C/D/E/L]", default="C").strip().lower()
+
+        if action in ("c", "n", "continuar", ""):
+            break
+        if action in ("d", "y", "duvida", "dúvida"):
+            doubt = Prompt.ask("Digite sua dúvida")
+            try:
+                with console.status("[bold yellow]O professor está respondendo sua dúvida...[/bold yellow]"):
+                    answer = teacher.answer_doubt(
+                        topic=topic,
+                        student_question=doubt,
+                        previous_explanation=explanation,
+                    )
+                console.print(Panel(Markdown(answer), title="💡 Resposta do Professor", border_style="yellow"))
+            except LLMClientError as exc:
+                render_llm_error(exc)
+        elif action in ("e", "erro"):
+            _handle_error_debugging_flow(
+                teacher=teacher,
+                student=student,
+                topic=topic,
+            )
+        elif action in ("l", "lab", "laboratorio", "laboratório"):
+            try:
+                _run_guided_lab_flow(teacher=teacher, student=student, topic=topic)
+            except LLMClientError as exc:
+                render_llm_error(exc)
+        else:
+            console.print("[yellow]Opção não reconhecida. Use C, D, E ou L.[/yellow]")
 
 
 @app.command()
@@ -103,46 +385,50 @@ def init(
     )
 
     diagnostician = Diagnostician()
-    with console.status("[bold cyan]Elaborando perguntas de diagnóstico pedagógico...[/bold cyan]"):
-        questions = diagnostician.generate_questions(target_subject=target_subject, count=3)
+    curriculum_gen = CurriculumGenerator()
+    try:
+        with console.status("[bold cyan]Elaborando perguntas de diagnóstico pedagógico...[/bold cyan]"):
+            questions = diagnostician.generate_questions(target_subject=target_subject, count=3)
 
-    student_answers = []
-    for idx, q in enumerate(questions, start=1):
+        student_answers = []
+        for idx, q in enumerate(questions, start=1):
+            console.print(
+                Panel(
+                    f"[bold cyan]Pergunta {idx}/3[/bold cyan] [dim]({q.topic_focus} • Nível: {q.difficulty.value})[/dim]\n\n"
+                    f"[bold]{q.question}[/bold]",
+                    border_style="cyan",
+                )
+            )
+            answer = Prompt.ask("Sua resposta (pode ser concisa ou 'não sei')")
+            student_answers.append(answer)
+
+        with console.status("[bold yellow]Avaliando suas respostas e calibrando seu nível...[/bold yellow]"):
+            report = diagnostician.evaluate_answers(
+                target_subject=target_subject,
+                questions=questions,
+                student_answers=student_answers,
+            )
+
+        profile.current_level = report.assessed_level
+        profile.diagnostic_history = report.answers
+
         console.print(
             Panel(
-                f"[bold cyan]Pergunta {idx}/3[/bold cyan] [dim]({q.topic_focus} • Nível: {q.difficulty.value})[/dim]\n\n"
-                f"[bold]{q.question}[/bold]",
-                border_style="cyan",
+                f"[bold green]📊 Resultado do Diagnóstico:[/bold green]\n"
+                f"• Nível Identificado: [bold cyan]{report.assessed_level.value.upper()}[/bold cyan]\n"
+                f"• Pontuação de Partida: [bold]{report.overall_score}/100[/bold]\n"
+                f"• Síntese: [italic]{report.summary_feedback}[/italic]\n"
+                f"• Lacunas a Cobrir: [dim]{', '.join(report.learning_gaps) if report.learning_gaps else 'Nenhuma'}[/dim]",
+                border_style="green",
             )
         )
-        answer = Prompt.ask("Sua resposta (pode ser concisa ou 'não sei')")
-        student_answers.append(answer)
 
-    with console.status("[bold yellow]Avaliando suas respostas e calibrando seu nível...[/bold yellow]"):
-        report = diagnostician.evaluate_answers(
-            target_subject=target_subject,
-            questions=questions,
-            student_answers=student_answers,
-        )
-
-    profile.current_level = report.assessed_level
-    profile.diagnostic_history = report.answers
-
-    console.print(
-        Panel(
-            f"[bold green]📊 Resultado do Diagnóstico:[/bold green]\n"
-            f"• Nível Identificado: [bold cyan]{report.assessed_level.value.upper()}[/bold cyan]\n"
-            f"• Pontuação de Partida: [bold]{report.overall_score}/100[/bold]\n"
-            f"• Síntese: [italic]{report.summary_feedback}[/italic]\n"
-            f"• Lacunas a Cobrir: [dim]{', '.join(report.learning_gaps) if report.learning_gaps else 'Nenhuma'}[/dim]",
-            border_style="green",
-        )
-    )
-
-    # Geração do Currículo
-    curriculum_gen = CurriculumGenerator()
-    with console.status("[bold green]Construindo sua trilha de aprendizado personalizada...[/bold green]"):
-        curriculum = curriculum_gen.generate(student_profile=profile, diagnostic_report=report)
+        # Geração do Currículo
+        with console.status("[bold green]Construindo sua trilha de aprendizado personalizada...[/bold green]"):
+            curriculum = curriculum_gen.generate(student_profile=profile, diagnostic_report=report)
+    except LLMClientError as exc:
+        render_llm_error(exc)
+        raise typer.Exit(code=1)
 
     # Persistência
     store = get_store()
@@ -155,7 +441,8 @@ def init(
             f"✅ [bold green]Trilha criada com sucesso para {profile.name}![/bold green]\n"
             f"Assunto: [bold]{curriculum.subject}[/bold] ({len(curriculum.topics)} tópicos mapeados)\n\n"
             "Para iniciar o estudo do primeiro tópico, execute:\n"
-            "  [bold cyan]study-agent study[/bold cyan]",
+            "  [bold cyan]python -m study_agent.cli study[/bold cyan]\n"
+            "  [dim](No Windows, você também pode usar: .\\study-agent study)[/dim]",
             border_style="green",
         )
     )
@@ -170,7 +457,8 @@ def status() -> None:
     if not student or not curriculum:
         console.print(
             "[yellow]⚠️ Nenhuma sessão ativa encontrada.[/yellow]\n"
-            "Execute [bold cyan]study-agent init[/bold cyan] para começar uma nova trilha."
+            "Execute [bold cyan]python -m study_agent.cli init[/bold cyan] "
+            "[dim](ou .\\study-agent init)[/dim] para começar uma nova trilha."
         )
         return
 
@@ -219,7 +507,10 @@ def map(
     student, curriculum = store.load_active_session()
 
     if not curriculum:
-        console.print("[yellow]⚠️ Nenhuma trilha ativa encontrada. Execute 'study-agent init'.[/yellow]")
+        console.print(
+            "[yellow]⚠️ Nenhuma trilha ativa encontrada. "
+            "Execute 'python -m study_agent.cli init' (ou '.\\study-agent init').[/yellow]"
+        )
         return
 
     if mermaid:
@@ -237,7 +528,10 @@ def study() -> None:
     student, curriculum = store.load_active_session()
 
     if not student or not curriculum:
-        console.print("[yellow]⚠️ Nenhuma sessão ativa encontrada. Execute 'study-agent init' primeiro.[/yellow]")
+        console.print(
+            "[yellow]⚠️ Nenhuma sessão ativa encontrada. "
+            "Execute 'python -m study_agent.cli init' (ou '.\\study-agent init') primeiro.[/yellow]"
+        )
         return
 
     # Procura o primeiro tópico disponível ou em progresso
@@ -271,41 +565,60 @@ def study() -> None:
     console.print("  [1] [green]Técnica de Feynman[/green] (Analogias intuitivas e linguagem simples)")
     console.print("  [2] [yellow]Técnico e Formal[/yellow] (Definições exatas e arquitetura interna)")
     console.print("  [3] [cyan]Prático (Hands-on)[/cyan] (Código comentado e casos reais)")
-    style_opt = Prompt.ask("Estilo", choices=["1", "2", "3"], default="1")
+    console.print("  [4] [magenta]Laboratório Guiado Passo a Passo[/magenta] (Missões práticas + Suporte a Erros)")
+    style_opt = Prompt.ask("Estilo", choices=["1", "2", "3", "4"], default="1")
     style_map = {
         "1": ExplanationStyle.FEYNMAN,
         "2": ExplanationStyle.TECHNICAL,
         "3": ExplanationStyle.PRACTICAL,
+        "4": ExplanationStyle.GUIDED_LAB,
     }
     chosen_style = style_map[style_opt]
 
     teacher = Teacher()
-    with console.status("[bold green]O professor está preparando sua explicação didática...[/bold green]"):
-        explanation = teacher.explain_topic(
-            topic=next_topic,
-            style=chosen_style,
-            student_context=f"Aluno nível {student.current_level.value}",
-        )
-
-    console.print("\n" + "=" * 60 + "\n")
-    console.print(Markdown(explanation))
-    console.print("\n" + "=" * 60 + "\n")
-
-    # Extrai takeaways para fixação
-    with console.status("[dim]Sintetizando pontos-chave...[/dim]"):
-        takeaways = teacher.summarize_key_takeaways(next_topic, explanation)
-    next_topic.key_takeaways = takeaways
-
-    # Ciclo de tirar dúvidas
-    while Confirm.ask("Ficou com alguma dúvida ou gostaria de um exemplo extra?"):
-        doubt = Prompt.ask("Digite sua dúvida")
-        with console.status("[bold yellow]O professor está respondendo sua dúvida...[/bold yellow]"):
-            answer = teacher.answer_doubt(
+    if chosen_style == ExplanationStyle.GUIDED_LAB:
+        try:
+            explanation = _run_guided_lab_flow(
+                teacher=teacher,
+                student=student,
                 topic=next_topic,
-                student_question=doubt,
-                previous_explanation=explanation,
             )
-        console.print(Panel(Markdown(answer), title="💡 Resposta do Professor", border_style="yellow"))
+        except LLMClientError as exc:
+            render_llm_error(exc)
+            raise typer.Exit(code=1)
+    else:
+        try:
+            with console.status("[bold green]O professor está preparando sua explicação didática...[/bold green]"):
+                explanation = teacher.explain_topic(
+                    topic=next_topic,
+                    style=chosen_style,
+                    student_context=f"Aluno nível {student.current_level.value}",
+                )
+        except LLMClientError as exc:
+            render_llm_error(exc)
+            raise typer.Exit(code=1)
+
+        console.print("\n" + "=" * 60 + "\n")
+        console.print(Markdown(explanation))
+        console.print("\n" + "=" * 60 + "\n")
+
+    # Extrai takeaways para fixação (degradação graciosa em caso de oscilação)
+    takeaways = next_topic.key_takeaways
+    try:
+        with console.status("[dim]Sintetizando pontos-chave...[/dim]"):
+            takeaways = teacher.summarize_key_takeaways(next_topic, explanation)
+        next_topic.key_takeaways = takeaways
+    except LLMClientError:
+        console.print("[dim yellow]⚠️ Síntese de pontos-chave ignorada devido a oscilação momentânea da rede.[/dim yellow]")
+
+    # Menu interativo de estudo (dúvidas, debugging de erros de terminal e laboratório prático)
+    if chosen_style != ExplanationStyle.GUIDED_LAB:
+        _run_interactive_study_menu(
+            teacher=teacher,
+            student=student,
+            topic=next_topic,
+            explanation=explanation,
+        )
 
     # Checagem ativa (Active Recall)
     console.print(
@@ -318,20 +631,27 @@ def study() -> None:
     )
 
     evaluator = Evaluator()
-    with console.status("[bold magenta]Elaborando pergunta de retenção ativa...[/bold magenta]"):
-        recall_question = evaluator.generate_active_recall_question(next_topic, key_takeaways=takeaways)
+    try:
+        with console.status("[bold magenta]Elaborando pergunta de retenção ativa...[/bold magenta]"):
+            recall_question = evaluator.generate_active_recall_question(next_topic, key_takeaways=takeaways)
 
-    console.print(
-        Panel(
-            f"[bold]{recall_question.question}[/bold]\n\n"
-            f"[dim]💡 Dica: {recall_question.hint or 'Explique o porquê com clareza.'}[/dim]",
-            border_style="magenta",
+        console.print(
+            Panel(
+                f"[bold]{recall_question.question}[/bold]\n\n"
+                f"[dim]💡 Dica: {recall_question.hint or 'Explique o porquê com clareza.'}[/dim]",
+                border_style="magenta",
+            )
         )
-    )
 
-    student_answer = Prompt.ask("Sua resposta")
-    with console.status("[bold cyan]Avaliando seu domínio conceitual...[/bold cyan]"):
-        evaluation = evaluator.evaluate_active_recall(recall_question, student_answer)
+        student_answer = Prompt.ask("Sua resposta")
+        with console.status("[bold cyan]Avaliando seu domínio conceitual...[/bold cyan]"):
+            evaluation = evaluator.evaluate_active_recall(recall_question, student_answer)
+    except LLMClientError as exc:
+        next_topic.status = TopicStatus.IN_PROGRESS
+        store.save_curriculum(curriculum)
+        render_llm_error(exc)
+        console.print("[dim]💾 Seu progresso parcial neste tópico foi salvo automaticamente.[/dim]")
+        raise typer.Exit(code=1)
 
     # Exibe resultado da avaliação
     status_color = "green" if evaluation.is_passing else "yellow"
@@ -348,8 +668,8 @@ def study() -> None:
         )
     )
 
-    # Atualiza status do tópico e salva trilha
-    evaluator.update_topic_mastery(next_topic, evaluation)
+    # Atualiza status do tópico, registra histórico de Active Recall e salva trilha
+    evaluator.update_topic_mastery(next_topic, evaluation, question=recall_question)
     curriculum.update_topic_statuses()
     store.save_curriculum(curriculum)
 
@@ -399,7 +719,101 @@ def students(
         table.add_row(is_active, s.id[:8], s.name, s.target_subject, s.current_level.value.title())
 
     console.print(table)
-    console.print("[dim]Para alternar a sessão ativa: study-agent students --switch <ID>[/dim]")
+    console.print(
+        "[dim]Para alternar a sessão ativa: python -m study_agent.cli students --switch <ID> "
+        "(ou .\\study-agent students --switch <ID>)[/dim]"
+    )
+
+
+@app.command()
+def export(
+    format: str = typer.Option(
+        "both",
+        "--format",
+        "-f",
+        help="Formato de exportação: 'both' (padrão), 'markdown' ou 'anki'",
+    ),
+    include_in_progress: bool = typer.Option(
+        False,
+        "--in-progress",
+        "-i",
+        help="Inclui também tópicos em andamento (além dos dominados)",
+    ),
+    output_dir: Optional[str] = typer.Option(
+        None,
+        "--output-dir",
+        "-o",
+        help="Diretório de saída dos arquivos (padrão: exports/)",
+    ),
+) -> None:
+    """Exporta resumos em Markdown e flashcards Anki dos tópicos estudados."""
+    store = get_store()
+    student, curriculum = store.load_active_session()
+
+    if not student or not curriculum:
+        console.print(
+            "[yellow]⚠️ Nenhuma sessão ativa encontrada. "
+            "Execute 'python -m study_agent.cli init' (ou '.\\study-agent init') primeiro.[/yellow]"
+        )
+        return
+
+    normalized_fmt = format.strip().lower()
+    if normalized_fmt not in StudyExporter.VALID_FORMATS:
+        console.print(
+            f"[red]❌ Formato inválido '{format}'. Escolha entre: both, markdown ou anki.[/red]"
+        )
+        raise typer.Exit(code=1)
+
+    exporter = StudyExporter(base_dir=output_dir) if output_dir else StudyExporter()
+    eligible = exporter.select_exportable_topics(
+        curriculum, include_in_progress=include_in_progress
+    )
+
+    if not eligible:
+        has_in_progress = any(t.status == TopicStatus.IN_PROGRESS for t in curriculum.topics)
+        extra_tip = (
+            "\n💡 Dica: Use a flag [bold cyan]--in-progress[/bold cyan] para exportar tópicos já iniciados."
+            if has_in_progress and not include_in_progress
+            else ""
+        )
+        console.print(
+            Panel(
+                "[yellow]Ainda não há tópicos dominados nesta trilha para exportar.[/yellow]\n"
+                "Conclua ao menos um tópico com [bold cyan]python -m study_agent.cli study[/bold cyan]."
+                f"{extra_tip}",
+                title="📦 Exportação de Resumos",
+                border_style="yellow",
+            )
+        )
+        return
+
+    result = exporter.export_session(
+        student=student,
+        curriculum=curriculum,
+        output_dir=output_dir,
+        fmt=normalized_fmt,
+        include_in_progress=include_in_progress,
+    )
+
+    details = [
+        f"• [bold]Estudante / Trilha:[/bold] {student.name} — {curriculum.subject}",
+        f"• [bold]Tópicos exportados:[/bold] [green]{result.topics_exported}[/green]",
+    ]
+    if result.markdown_path:
+        details.append(f"• [bold]Resumo Markdown:[/bold] [cyan]{result.markdown_path}[/cyan]")
+    if result.anki_path:
+        details.append(
+            f"• [bold]Deck Anki ({result.flashcards_generated} cartões):[/bold] [cyan]{result.anki_path}[/cyan]\n"
+            "  [dim]No Anki: Arquivo ➔ Importar ➔ selecione o arquivo .txt gerado (separador e deck automáticos).[/dim]"
+        )
+
+    console.print(
+        Panel(
+            "\n".join(details),
+            title="✅ Material de Revisão Exportado com Sucesso",
+            border_style="green",
+        )
+    )
 
 
 if __name__ == "__main__":

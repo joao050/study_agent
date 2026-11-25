@@ -8,6 +8,7 @@ from study_agent.core.llm_client import LLMClient
 from study_agent.models.curriculum import (
     ActiveRecallEvaluation,
     ActiveRecallQuestion,
+    RecallRecord,
     Topic,
     TopicStatus,
 )
@@ -149,10 +150,24 @@ class Evaluator:
         topic: Topic,
         evaluation: ActiveRecallEvaluation,
         passing_score: float = PASSING_SCORE_DEFAULT,
+        question: Optional[ActiveRecallQuestion] = None,
     ) -> Topic:
         """Atualiza o estado de domínio, nota e histórico de revisões do tópico."""
+        now = datetime.now(timezone.utc)
         topic.review_count += 1
-        topic.last_reviewed_at = datetime.now(timezone.utc)
+        topic.last_reviewed_at = now
+
+        if question is not None:
+            topic.recall_history.append(
+                RecallRecord(
+                    question=question.question,
+                    student_answer=evaluation.student_answer,
+                    expected_concepts=list(question.expected_concepts),
+                    feedback=evaluation.feedback,
+                    score=evaluation.score,
+                    recorded_at=now,
+                )
+            )
 
         if evaluation.is_passing or evaluation.score >= passing_score:
             topic.status = TopicStatus.MASTERED

@@ -7,8 +7,10 @@ from pydantic import BaseModel
 
 from study_agent.config import Settings
 from study_agent.core.llm_client import (
+    LLMAuthenticationError,
     LLMClient,
     LLMClientError,
+    LLMConnectionError,
     LLMResponseValidationError,
 )
 
@@ -132,3 +134,128 @@ def test_extract_clean_json_variations():
     # Array JSON puro
     raw3 = "[1, 2, 3]"
     assert LLMClient._extract_clean_json(raw3) == '[1, 2, 3]'
+
+
+@patch("study_agent.core.llm_client.time.sleep")
+@patch("litellm.completion")
+def test_retry_on_503_succeeds_with_exponential_backoff(mock_completion, mock_sleep):
+    """Simula duas falhas 503 Service Unavailable seguidas de sucesso na 3ª tentativa."""
+    mock_choice = MagicMock()
+    mock_choice.message.content = "Resposta recuperada após oscilação!"
+    success_response = MagicMock(choices=[mock_choice])
+
+    mock_completion.side_effect = [
+        RuntimeError("503 Service Unavailable - Model is overloaded"),
+        RuntimeError("503 UNAVAILABLE"),
+        success_response,
+    ]
+
+    retry_events = []
+    settings = Settings(llm_num_retries=3, llm_retry_base_delay=1.0)
+    client = LLMClient(
+        settings=settings,
+        on_retry=lambda attempt, max_r, delay, exc: retry_events.append((attempt, max_r, delay)),
+    )
+
+    result = client.generate(prompt="Explique redes")
+
+    assert result == "Resposta recuperada após oscilação!"
+    assert mock_completion.call_count == 3
+    assert mock_sleep.call_count == 2
+    assert len(retry_events) == 2
+    assert retry_events[0][0] == 1 and retry_events[0][1] == 3
+    assert retry_events[1][0] == 2 and retry_events[1][1] == 3
+    # Verifica crescimento do backoff exponencial: tentativa 1 (~1s..1.25s) < tentativa 2 (~2s..2.25s)
+    delay_1 = mock_sleep.call_args_list[0].args[0]
+    delay_2 = mock_sleep.call_args_list[1].args[0]
+    assert 1.0 <= delay_1 <= 1.25
+    assert 2.0 <= delay_2 <= 2.25
+
+
+@patch("study_agent.core.llm_client.time.sleep")
+@patch("litellm.completion")
+def test_retry_exhausted_raises_llm_connection_error(mock_completion, mock_sleep):
+    """Verifica que esgotar todas as retentativas levanta LLMConnectionError com metadados."""
+    mock_completion.side_effect = RuntimeError("503 Service Unavailable")
+
+    settings = Settings(llm_num_retries=3, llm_retry_base_delay=0.5)
+    client = LLMClient(settings=settings)
+
+    with pytest.raises(LLMConnectionError, match="após 4 tentativa") as exc_info:
+        client.generate(prompt="Teste 503 persistente")
+
+    assert exc_info.value.attempts == 4
+    assert exc_info.value.is_rate_limit is False
+    assert mock_completion.call_count == 4
+    assert mock_sleep.call_count == 3
+
+
+@patch("study_agent.core.llm_client.time.sleep")
+@patch("litellm.completion")
+def test_rate_limit_429_sets_rate_limit_flag(mock_completion, mock_sleep):
+    """Verifica detecção de erro 429 (Rate Limit / Resource Exhausted)."""
+    mock_completion.side_effect = RuntimeError("429 RESOURCE_EXHAUSTED: Rate limit reached")
+
+    settings = Settings(llm_num_retries=2, llm_retry_base_delay=0.5)
+    client = LLMClient(settings=settings)
+
+    with pytest.raises(LLMConnectionError) as exc_info:
+        client.generate(prompt="Teste cota")
+
+    assert exc_info.value.attempts == 3
+    assert exc_info.value.is_rate_limit is True
+    assert mock_completion.call_count == 3
+    assert mock_sleep.call_count == 2
+
+
+@patch("study_agent.core.llm_client.time.sleep")
+@patch("litellm.completion")
+def test_authentication_error_fails_immediately_without_retry(mock_completion, mock_sleep):
+    """Garante que chaves de API inválidas (401/API_KEY_INVALID) falham na hora sem desperdiçar retries."""
+    mock_completion.side_effect = RuntimeError("401 Unauthorized: API_KEY_INVALID")
+
+    settings = Settings(llm_num_retries=3, llm_retry_base_delay=1.0)
+    client = LLMClient(settings=settings)
+
+    with pytest.raises(LLMAuthenticationError, match="credenciais ou chave de API inválidas"):
+        client.generate(prompt="Teste chave inválida")
+
+    assert mock_completion.call_count == 1
+    assert mock_sleep.call_count == 0
+
+
+@patch("study_agent.core.llm_client.time.sleep")
+@patch("litellm.completion")
+def test_generate_structured_503_does_not_double_retry(mock_completion, mock_sleep):
+    """Garante que erro 503 em generate_structured não repete todo o ciclo sem response_format."""
+    mock_completion.side_effect = RuntimeError("503 Service Unavailable")
+
+    settings = Settings(llm_num_retries=2, llm_retry_base_delay=0.5)
+    client = LLMClient(settings=settings)
+
+    with pytest.raises(LLMConnectionError) as exc_info:
+        client.generate_structured(prompt="Gere JSON", response_model=DummySampleModel)
+
+    assert exc_info.value.attempts == 3
+    assert mock_completion.call_count == 3
+    assert mock_sleep.call_count == 2
+
+
+@patch("study_agent.core.llm_client.time.sleep")
+@patch("litellm.completion")
+def test_generate_structured_fallback_when_response_format_unsupported(mock_completion, mock_sleep):
+    """Garante fallback limpo sem sleep quando provedor não suporta response_format json_object."""
+    mock_choice = MagicMock()
+    mock_choice.message.content = '{"title": "Fallback OK", "score": 88}'
+    mock_completion.side_effect = [
+        ValueError("Unsupported param: response_format"),
+        MagicMock(choices=[mock_choice]),
+    ]
+
+    client = LLMClient(settings=Settings(llm_num_retries=3))
+    obj = client.generate_structured(prompt="Gere JSON", response_model=DummySampleModel)
+
+    assert obj.title == "Fallback OK"
+    assert obj.score == 88
+    assert mock_completion.call_count == 2
+    assert mock_sleep.call_count == 0

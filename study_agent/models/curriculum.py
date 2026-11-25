@@ -18,9 +18,64 @@ class TopicStatus(str, Enum):
 
 class ExplanationStyle(str, Enum):
     """Estilo pedagógico adotado pelo tutor durante a explicação."""
-    FEYNMAN = "feynman"     # Analogias simples, linguagem do cotidiano, foco no conceito nuclear
-    TECHNICAL = "technical" # Rigor formal, terminologia exata e detalhes de baixo nível
-    PRACTICAL = "practical" # Foco 'mão na massa', exemplos práticos de código e casos de uso reais
+    FEYNMAN = "feynman"         # Analogias simples, linguagem do cotidiano, foco no conceito nuclear
+    TECHNICAL = "technical"     # Rigor formal, terminologia exata e detalhes de baixo nível
+    PRACTICAL = "practical"     # Foco 'mão na massa', exemplos práticos de código e casos de uso reais
+    GUIDED_LAB = "guided_lab"   # Laboratório guiado passo a passo com missões e checkpoints práticos
+
+
+class LabMission(BaseModel):
+    """Passo prático executável (missão) dentro de um laboratório guiado."""
+    step_number: int = Field(ge=1, description="Número sequencial da missão prática")
+    title: str = Field(description="Título curto e acionável da missão")
+    instruction: str = Field(description="Instrução didática do que fazer e o porquê deste passo")
+    command_or_code: str = Field(
+        description="Comando de terminal ou trecho de código exato para o aluno executar"
+    )
+    expected_outcome: str = Field(
+        description="O que deve aparecer ou acontecer se o passo funcionar (checkpoint)"
+    )
+    verification_hint: Optional[str] = Field(
+        default=None,
+        description="Dica rápida de verificação ou alerta de armadilha comum no ambiente",
+    )
+
+
+class GuidedLab(BaseModel):
+    """Roteiro completo de laboratório prático guiado com scaffolding progressivo."""
+    topic_id: str = Field(description="ID do tópico associado")
+    intro_brief: str = Field(
+        description="Breve contextualização conceitual antes de iniciar a prática"
+    )
+    prerequisites_check: Optional[str] = Field(
+        default=None,
+        description="Checagem rápida de ambiente ou ferramenta antes da Missão 1",
+    )
+    missions: List[LabMission] = Field(
+        min_length=1,
+        description="Sequência ordenada de missões práticas passo a passo",
+    )
+
+
+class ErrorDebugResolution(BaseModel):
+    """Diagnóstico pedagógico estruturado para erros de execução ou stack traces."""
+    error_summary: str = Field(
+        description="Tradução didática e direta do que a mensagem de erro significa"
+    )
+    root_cause: str = Field(
+        description="Explicação clara da causa raiz no ambiente, comando ou código do aluno"
+    )
+    fix_instructions: List[str] = Field(
+        min_length=1,
+        description="Passos objetivos e ordenados para corrigir o problema imediatamente",
+    )
+    corrected_command_or_code: str = Field(
+        description="Comando ou trecho de código corrigido pronto para testar"
+    )
+    prevention_tip: Optional[str] = Field(
+        default=None,
+        description="Dica prática para reconhecer ou evitar esse erro no futuro",
+    )
 
 
 class ActiveRecallQuestion(BaseModel):
@@ -56,6 +111,19 @@ class ActiveRecallEvaluation(BaseModel):
     )
 
 
+class RecallRecord(BaseModel):
+    """Registro histórico de uma pergunta e resposta de Active Recall para revisão e exportação."""
+    question: str = Field(description="Pergunta aberta formulada na sessão")
+    student_answer: str = Field(default="", description="Resposta fornecida pelo estudante")
+    expected_concepts: List[str] = Field(
+        default_factory=list,
+        description="Conceitos-chave esperados como referência",
+    )
+    feedback: str = Field(default="", description="Comentário avaliativo do professor")
+    score: float = Field(default=0.0, ge=0.0, le=100.0, description="Nota obtida (0 a 100)")
+    recorded_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+
 class Topic(BaseModel):
     """Unidade atômica de aprendizado dentro de uma trilha."""
     id: str = Field(description="Identificador único (ex: 'mod1_topico01' ou uuid)")
@@ -89,6 +157,15 @@ class Topic(BaseModel):
     key_takeaways: List[str] = Field(
         default_factory=list,
         description="Pontos centrais e resumos salvos após as sessões"
+    )
+    completed_lab_steps: int = Field(
+        default=0,
+        ge=0,
+        description="Quantidade de missões práticas concluídas no laboratório guiado",
+    )
+    recall_history: List[RecallRecord] = Field(
+        default_factory=list,
+        description="Histórico de avaliações de Active Recall realizadas neste tópico",
     )
 
 

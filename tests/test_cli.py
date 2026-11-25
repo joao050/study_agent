@@ -7,10 +7,18 @@ from typer.testing import CliRunner
 from study_agent import __version__
 from study_agent.cli import app
 from study_agent.core.diagnostician import DiagnosticReport
+from study_agent.core.llm_client import (
+    LLMAuthenticationError,
+    LLMConnectionError,
+)
 from study_agent.models.curriculum import (
     ActiveRecallEvaluation,
     ActiveRecallQuestion,
     Curriculum,
+    ErrorDebugResolution,
+    GuidedLab,
+    LabMission,
+    RecallRecord,
     Topic,
     TopicStatus,
 )
@@ -288,3 +296,414 @@ def test_cli_study_full_flow(
     assert "Tópico Dominado!" in result.output
     assert "O próximo tópico da trilha foi desbloqueado" in result.output
     mock_store.save_curriculum.assert_called_once()
+
+
+@patch("study_agent.cli.Diagnostician")
+def test_cli_init_handles_llm_connection_error_gracefully(mock_diagnostician_cls):
+    """Verifica que falha 503 esgotada exibe painel amigável sem vazar stack trace bruto."""
+    mock_diag = MagicMock()
+    mock_diag.generate_questions.side_effect = LLMConnectionError(
+        "Falha após 4 tentativas: 503 Service Unavailable",
+        attempts=4,
+        status_code=503,
+        is_rate_limit=False,
+    )
+    mock_diagnostician_cls.return_value = mock_diag
+
+    user_inputs = "\n".join(["Carlos", "Rust", "2", "2", "45"])
+    result = runner.invoke(app, ["init"], input=user_inputs)
+
+    assert result.exit_code == 1
+    assert "Serviço de IA Temporariamente Indisponível" in result.output
+    assert "4 tentativa(s)" in result.output
+    assert "Traceback" not in result.output
+
+
+@patch("study_agent.cli.Diagnostician")
+def test_cli_init_handles_authentication_error_gracefully(mock_diagnostician_cls):
+    """Verifica aviso claro de configuração .env quando a API Key é inválida."""
+    mock_diag = MagicMock()
+    mock_diag.generate_questions.side_effect = LLMAuthenticationError("API key invalid")
+    mock_diagnostician_cls.return_value = mock_diag
+
+    user_inputs = "\n".join(["Ana", "FastAPI", "1", "1", "25"])
+    result = runner.invoke(app, ["init"], input=user_inputs)
+
+    assert result.exit_code == 1
+    assert "Erro de Credenciais / API Key" in result.output
+    assert ".env" in result.output
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Teacher")
+@patch("study_agent.cli.Evaluator")
+def test_cli_study_doubt_error_recovers_without_aborting_lesson(
+    mock_evaluator_cls,
+    mock_teacher_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Verifica que erro 503 ao tirar uma dúvida exibe painel amigável e mantém a aula viva."""
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    mock_teacher = MagicMock()
+    mock_teacher.explain_topic.return_value = "# Aula sobre Containers"
+    mock_teacher.summarize_key_takeaways.return_value = ["Isolamento"]
+    mock_teacher.answer_doubt.side_effect = LLMConnectionError(
+        "503 Service Unavailable", attempts=4, is_rate_limit=True
+    )
+    mock_teacher_cls.return_value = mock_teacher
+
+    mock_evaluator = MagicMock()
+    mock_evaluator.generate_active_recall_question.return_value = ActiveRecallQuestion(
+        id="q1", question="O que é um container?", expected_concepts=["Isolamento"]
+    )
+    mock_evaluator.evaluate_active_recall.return_value = ActiveRecallEvaluation(
+        question_id="q1",
+        student_answer="Processo isolado",
+        score=90.0,
+        understood_concepts=["Isolamento"],
+        missing_or_confused_concepts=[],
+        feedback="Muito bem!",
+        is_passing=True,
+    )
+    mock_evaluator_cls.return_value = mock_evaluator
+
+    user_inputs = "\n".join([
+        "1",
+        "y",
+        "Dúvida durante pico de tráfego",
+        "n",
+        "Processo isolado",
+    ])
+
+    result = runner.invoke(app, ["study"], input=user_inputs)
+    assert result.exit_code == 0
+    assert "Serviço de IA Temporariamente Indisponível" in result.output
+    assert "limite de requisições" in result.output
+    assert "429" in result.output
+    assert "Tópico Dominado!" in result.output
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Teacher")
+@patch("study_agent.cli.Evaluator")
+def test_cli_study_active_recall_error_saves_partial_progress(
+    mock_evaluator_cls,
+    mock_teacher_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Verifica que falha no Active Recall salva progresso parcial (IN_PROGRESS) antes de encerrar."""
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    mock_teacher = MagicMock()
+    mock_teacher.explain_topic.return_value = "# Aula sobre Containers"
+    mock_teacher.summarize_key_takeaways.return_value = ["Namespaces", "Cgroups"]
+    mock_teacher_cls.return_value = mock_teacher
+
+    mock_evaluator = MagicMock()
+    mock_evaluator.generate_active_recall_question.side_effect = LLMConnectionError(
+        "503 Unavailable", attempts=4
+    )
+    mock_evaluator_cls.return_value = mock_evaluator
+
+    user_inputs = "\n".join(["1", "n"])
+    result = runner.invoke(app, ["study"], input=user_inputs)
+
+    assert result.exit_code == 1
+    assert "Serviço de IA Temporariamente Indisponível" in result.output
+    assert "progresso parcial neste tópico foi salvo" in result.output
+    assert sample_curriculum.topics[0].status == TopicStatus.IN_PROGRESS
+    assert sample_curriculum.topics[0].key_takeaways == ["Namespaces", "Cgroups"]
+    mock_store.save_curriculum.assert_called_once_with(sample_curriculum)
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Teacher")
+@patch("study_agent.cli.Evaluator")
+def test_cli_study_report_terminal_error_option_e(
+    mock_evaluator_cls,
+    mock_teacher_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa opção [E] no menu de estudo colando stack trace multilinha e prosseguindo."""
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    mock_teacher = MagicMock()
+    mock_teacher.explain_topic.return_value = "# Aula Prática de Docker"
+    mock_teacher.summarize_key_takeaways.return_value = ["Daemon", "CLI"]
+    mock_teacher.debug_error.return_value = ErrorDebugResolution(
+        error_summary="O motor do Docker não está em execução.",
+        root_cause="O serviço Docker Desktop está fechado no Windows.",
+        fix_instructions=["Inicie o Docker Desktop", "Rode docker info para confirmar"],
+        corrected_command_or_code="docker ps",
+        prevention_tip="Confira o ícone da baleia na bandeja do sistema.",
+    )
+    mock_teacher_cls.return_value = mock_teacher
+
+    mock_evaluator = MagicMock()
+    mock_evaluator.generate_active_recall_question.return_value = ActiveRecallQuestion(
+        id="q1", question="Qual papel do Docker daemon?", expected_concepts=["Gerenciar containers"]
+    )
+    mock_evaluator.evaluate_active_recall.return_value = ActiveRecallEvaluation(
+        question_id="q1",
+        student_answer="Gerencia os containers em background",
+        score=92.0,
+        understood_concepts=["Daemon"],
+        missing_or_confused_concepts=[],
+        feedback="Perfeito!",
+        is_passing=True,
+    )
+    mock_evaluator_cls.return_value = mock_evaluator
+
+    # Fluxo:
+    # 3 -> Estilo Prático
+    # E -> Reportar Erro / Colar Terminal
+    # docker run hello-world -> comando tentado
+    # 2 linhas de erro + linha vazia -> finaliza captura multilinha
+    # C -> Concluir estudo e ir para Active Recall
+    # Resposta do Active Recall
+    user_inputs = "\n".join([
+        "3",
+        "E",
+        "docker run hello-world",
+        "docker: error during connect: open //./pipe/docker_engine",
+        "The system cannot find the file specified.",
+        "",
+        "C",
+        "Gerencia os containers em background",
+    ])
+
+    result = runner.invoke(app, ["study"], input=user_inputs)
+    assert result.exit_code == 0
+    assert "Assistente de Debugging em Tempo Real" in result.output
+    assert "Docker Desktop" in result.output
+    assert "Tópico Dominado!" in result.output
+
+    mock_teacher.debug_error.assert_called_once()
+    debug_kwargs = mock_teacher.debug_error.call_args.kwargs
+    assert debug_kwargs["command_attempted"] == "docker run hello-world"
+    assert "docker_engine" in debug_kwargs["error_output"]
+    assert "cannot find the file" in debug_kwargs["error_output"]
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Teacher")
+@patch("study_agent.cli.Evaluator")
+def test_cli_study_guided_lab_mode_with_error_checkpoint(
+    mock_evaluator_cls,
+    mock_teacher_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa estilo [4] Laboratório Guiado Passo a Passo com erro na Missão 1 e conclusão."""
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    mock_teacher = MagicMock()
+    mock_teacher.generate_guided_lab.return_value = GuidedLab(
+        topic_id="t1",
+        intro_brief="Vamos testar containers na prática.",
+        prerequisites_check="Docker ativo",
+        missions=[
+            LabMission(
+                step_number=1,
+                title="Verificar versão",
+                instruction="Valide o CLI do Docker",
+                command_or_code="docker --version",
+                expected_outcome="Mostra versão instalada",
+            ),
+            LabMission(
+                step_number=2,
+                title="Subir hello-world",
+                instruction="Execute seu primeiro container",
+                command_or_code="docker run --rm hello-world",
+                expected_outcome="Imprime Hello from Docker!",
+            ),
+        ],
+    )
+    mock_teacher.debug_error.return_value = ErrorDebugResolution(
+        error_summary="Flag digitada com apenas um hífen.",
+        root_cause="Você digitou -version em vez de --version.",
+        fix_instructions=["Use dois hífens: docker --version"],
+        corrected_command_or_code="docker --version",
+    )
+    mock_teacher.summarize_key_takeaways.return_value = ["CLI", "Hello World"]
+    mock_teacher_cls.return_value = mock_teacher
+
+    mock_evaluator = MagicMock()
+    mock_evaluator.generate_active_recall_question.return_value = ActiveRecallQuestion(
+        id="q_lab", question="O que faz a flag --rm?", expected_concepts=["Remove container ao sair"]
+    )
+    mock_evaluator.evaluate_active_recall.return_value = ActiveRecallEvaluation(
+        question_id="q_lab",
+        student_answer="Remove o container assim que ele termina",
+        score=95.0,
+        understood_concepts=["Limpeza automática"],
+        missing_or_confused_concepts=[],
+        feedback="Excelente domínio prático!",
+        is_passing=True,
+    )
+    mock_evaluator_cls.return_value = mock_evaluator
+
+    # Fluxo:
+    # 4 -> Laboratório Guiado Passo a Passo
+    # E -> Na Missão 1, reporta erro
+    # "" -> Aceita o default_command (docker --version)
+    # "unknown shorthand flag: 'v' in -version" + "" -> envia erro multilinha
+    # P -> Missão 1 funcionou!
+    # P -> Missão 2 funcionou!
+    # Resposta Active Recall
+    user_inputs = "\n".join([
+        "4",
+        "E",
+        "",
+        "unknown shorthand flag: 'v' in -version",
+        "",
+        "P",
+        "P",
+        "Remove o container assim que ele termina",
+    ])
+
+    result = runner.invoke(app, ["study"], input=user_inputs)
+    assert result.exit_code == 0
+    assert "Missão 1/2: Verificar versão" in result.output
+    assert "Missão 2/2: Subir hello-world" in result.output
+    assert "Assistente de Debugging em Tempo Real" in result.output
+    assert sample_curriculum.topics[0].completed_lab_steps == 2
+    assert "Tópico Dominado!" in result.output
+
+
+def test_cli_portable_command_hints_displayed(
+    sample_student: StudentProfile, sample_curriculum: Curriculum
+):
+    """Verifica que as instruções da CLI sugerem o comando portátil python -m study_agent.cli."""
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (None, None)
+        mock_store.list_students.return_value = [sample_student]
+        mock_store.get_current_session.return_value = (sample_student.id, sample_curriculum.id)
+        mock_get_store.return_value = mock_store
+
+        for cmd in (["status"], ["map"], ["study"], ["students"]):
+            res = runner.invoke(app, cmd)
+            assert res.exit_code == 0
+            assert "python -m study_agent.cli" in res.output
+
+
+def test_windows_wrapper_and_packaging_entrypoints():
+    """Valida existência e configuração de study-agent.bat, pyproject.toml, __main__.py e README.md."""
+    from pathlib import Path
+    import tomllib
+
+    project_root = Path(__file__).resolve().parent.parent
+
+    bat_file = project_root / "study-agent.bat"
+    assert bat_file.exists()
+    bat_content = bat_file.read_text(encoding="utf-8")
+    assert "-m study_agent.cli %*" in bat_content
+    assert ".venv\\Scripts\\python.exe" in bat_content
+
+    main_file = project_root / "study_agent" / "__main__.py"
+    assert main_file.exists()
+
+    pyproject_file = project_root / "pyproject.toml"
+    assert pyproject_file.exists()
+    pyproject_data = tomllib.loads(pyproject_file.read_text(encoding="utf-8"))
+    assert pyproject_data["project"]["scripts"]["study-agent"] == "study_agent.cli:app"
+
+    readme_file = project_root / "README.md"
+    assert readme_file.exists()
+    readme_text = readme_file.read_text(encoding="utf-8")
+    assert "Set-ExecutionPolicy" in readme_text
+    assert "study-agent.bat" in readme_text or ".\\study-agent" in readme_text
+
+
+def test_cli_export_command_generates_markdown_and_anki(
+    tmp_path,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa comando CLI 'export' gerando arquivos Markdown e Anki em diretório customizado."""
+    sample_curriculum.topics[0].status = TopicStatus.MASTERED
+    sample_curriculum.topics[0].mastery_score = 90.0
+    sample_curriculum.topics[0].key_takeaways = ["Isolamento por namespaces"]
+    sample_curriculum.topics[0].recall_history = [
+        RecallRecord(
+            question="Como containers isolam processos?",
+            student_answer="Usando namespaces do kernel.",
+            expected_concepts=["Namespaces", "Cgroups"],
+            feedback="Ótimo!",
+            score=90.0,
+        )
+    ]
+
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        result = runner.invoke(app, ["export", "--output-dir", str(tmp_path)])
+        assert result.exit_code == 0
+        assert "Material de Revisão Exportado com Sucesso" in result.output
+        assert "2 cartões" in result.output
+
+        generated_md = list(tmp_path.glob("resumo_*.md"))
+        generated_anki = list(tmp_path.glob("anki_*.txt"))
+        assert len(generated_md) == 1
+        assert len(generated_anki) == 1
+
+
+def test_cli_export_in_progress_hint_and_flag(
+    tmp_path,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa dica de --in-progress quando não há tópicos MASTERED e exportação com a flag."""
+    sample_curriculum.topics[0].status = TopicStatus.IN_PROGRESS
+    sample_curriculum.topics[0].key_takeaways = ["Em andamento"]
+
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        # Sem flag --in-progress: avisa e sugere a flag
+        res_warn = runner.invoke(app, ["export", "--output-dir", str(tmp_path)])
+        assert res_warn.exit_code == 0
+        assert "--in-progress" in res_warn.output
+
+        # Com flag --in-progress: exporta normalmente
+        res_ok = runner.invoke(
+            app, ["export", "--in-progress", "--format", "markdown", "--output-dir", str(tmp_path)]
+        )
+        assert res_ok.exit_code == 0
+        assert len(list(tmp_path.glob("resumo_*.md"))) == 1
+
+
+def test_cli_export_invalid_format_returns_error_code(
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Verifica retorno exit_code=1 quando formato desconhecido é informado."""
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        res = runner.invoke(app, ["export", "--format", "formato_invalido"])
+        assert res.exit_code == 1
+        assert "Formato inválido" in res.output

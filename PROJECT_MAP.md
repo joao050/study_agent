@@ -26,8 +26,9 @@ study-agent/
 │   │   ├── llm_client.py        # Abstração de chamadas de LLM (LiteLLM)
 │   │   ├── diagnostician.py     # Diagnóstico de conhecimentos prévios e nivelamento
 │   │   ├── curriculum_gen.py    # Planejador da trilha de estudos e geração de tópicos
-│   │   ├── teacher.py           # Explicações didáticas, analogias e resolução de dúvidas
-│   │   └── evaluator.py         # Checagem de absorção (Active Recall) e pontuação de domínio
+│   │   ├── teacher.py           # Explicações didáticas, laboratório guiado e debug de erros
+│   │   ├── evaluator.py         # Checagem de absorção (Active Recall) e pontuação de domínio
+│   │   └── exporter.py          # Exportação de resumos Markdown e flashcards Anki TSV
 │   └── storage/                 # Camada de persistência local
 │       ├── __init__.py
 │       └── session_store.py     # Leitura e escrita de perfis e trilhas em JSON local
@@ -53,7 +54,8 @@ study-agent/
 | Perguntas de diagnóstico & cálculo de nível | `study_agent/core/diagnostician.py` |
 | Montagem da árvore de estudos & tópicos | `study_agent/core/curriculum_gen.py` |
 | Explicações didáticas, laboratório & debug | `study_agent/core/teacher.py` (`explain_topic`, `generate_guided_lab`, `debug_error`) |
-| Testes de absorção & cálculo de pontuação | `study_agent/core/evaluator.py` |
+| Testes de absorção & cálculo de pontuação | `study_agent/core/evaluator.py` (`Evaluator`, histórico `RecallRecord`) |
+| Exportação de Resumos & Flashcards Anki | `study_agent/core/exporter.py` (`StudyExporter`, `AnkiCard`, `ExportResult`) |
 | Schemas do Aluno & Objetivos | `study_agent/models/student.py` |
 | Schemas da Trilha, Laboratório & Debug | `study_agent/models/curriculum.py` (`Curriculum`, `Topic`, `GuidedLab`, `LabMission`, `ErrorDebugResolution`) |
 | Salvar/Recuperar progresso em disco | `study_agent/storage/session_store.py` |

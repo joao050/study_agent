@@ -8,6 +8,7 @@ from study_agent.models.curriculum import (
     ExplanationStyle,
     GuidedLab,
     LabMission,
+    RecallRecord,
     Topic,
     TopicStatus,
 )
@@ -32,6 +33,7 @@ __all__ = [
     "ErrorDebugResolution",
     "ActiveRecallQuestion",
     "ActiveRecallEvaluation",
+    "RecallRecord",
     "Topic",
     "Curriculum",
 ]

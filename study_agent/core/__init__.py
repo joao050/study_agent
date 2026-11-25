@@ -3,6 +3,7 @@
 from study_agent.core.curriculum_gen import CurriculumGenerator
 from study_agent.core.diagnostician import Diagnostician, DiagnosticReport
 from study_agent.core.evaluator import Evaluator
+from study_agent.core.exporter import AnkiCard, ExportResult, StudyExporter
 from study_agent.core.llm_client import (
     LLMAuthenticationError,
     LLMClient,
@@ -23,4 +24,7 @@ __all__ = [
     "CurriculumGenerator",
     "Teacher",
     "Evaluator",
+    "AnkiCard",
+    "ExportResult",
+    "StudyExporter",
 ]

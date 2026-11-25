@@ -3,7 +3,7 @@
 ## 1. Visão Geral
 Agente inteligente de estudos via terminal (CLI) que atua como um mentor particular adaptativo. Realiza diagnóstico inicial do aluno, monta trilhas e mapas de aprendizado customizados, conduz sessões didáticas com a técnica de Feynman, faz checagem ativa de conhecimento (Active Recall) e mantém acompanhamento de domínio com gamificação leve (barras de progresso e níveis).
 - **Stack:** Python 3.10+, Typer / Click, Rich (Terminal UI), LiteLLM (suporte flexível a Gemini, OpenAI, Claude, Ollama), Pydantic v2 (validação de schemas e structured outputs).
-- **Como Rodar:** `python -m study_agent.cli` ou via comando `study-agent start`.
+- **Como Rodar:** `python -m study_agent.cli`, `.\study-agent` (via `study-agent.bat` no Windows) ou `study-agent` (após `pip install -e .`).
 
 ## 2. Árvore Comentada
 ```text
@@ -14,6 +14,7 @@ study-agent/
 ├── data/                        # Dados locais de sessões e histórico dos estudantes (JSON)
 ├── study_agent/
 │   ├── __init__.py              # Versão do pacote
+│   ├── __main__.py              # Execução direta via python -m study_agent
 │   ├── cli.py                   # Ponto de entrada CLI (comandos typer e rich UI)
 │   ├── config.py                # Configurações de ambiente, chaves de API e modelos LLM
 │   ├── models/                  # Modelos Pydantic (validação estrutural de dados)
@@ -36,6 +37,8 @@ study-agent/
 │   └── test_models.py           # Testes de integridade de schemas Pydantic
 ├── .env.example                 # Exemplo de configuração de variáveis de ambiente
 ├── .gitignore                   # Ignora dados locais, venv, caches e chaves
+├── pyproject.toml               # Metadados PEP 621 e entrypoint console study-agent
+├── study-agent.bat              # Wrapper executável direto para Windows (PowerShell/CMD)
 ├── PROJECT_MAP.md               # [Este arquivo] Arquitetura e mapa cirúrgico
 ├── PROJECT_TASKS.md             # Registro vivo de tarefas, backlog e decisões
 └── README.md                    # Documentação do projeto para a comunidade GitHub

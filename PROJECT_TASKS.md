@@ -1,21 +1,31 @@
 # PROJECT_TASKS.md — Registro Vivo de Tarefas (AI Study Agent)
 
 ## 1. Fase Atual
-- **Fase:** Fase 2 Concluída! 🎉 (Pedagogia Guiada, Resiliência, Ergonomia & Exportação)
-- **Objetivo:** Todas as entregas das Fases 1 e 2 foram concluídas com 100% dos testes aprovados.
+- **Fase:** Fase 3 — Gamificação, Repetição Espaçada (SRS) & Interface Web Integrada 🚀
+- **Objetivo:** Implementar os motores de gamificação/metas (`#TASK-13`) e repetição espaçada (`#TASK-15`) no `core/`, seguidos pelo Web App integrado em FastAPI (`#TASK-14`) compartilhando a mesma base de dados da CLI.
 
 ## 2. Em Andamento
-- Nenhuma no momento (Fase 2 finalizada; Fase 3 planejada no backlog futuro).
+- Planejamento arquitetural da Fase 3 consolidado (próxima execução: `#TASK-13`).
 
-## 3. Planejadas (Backlog — Fase 2: Concluído)
-- Todas as tarefas da Fase 2 (`#TASK-09` a `#TASK-12`) foram entregues! ✅
+## 3. Planejadas (Backlog Oficial — Fase 3 | Ordem: `#13` ➔ `#15` ➔ `#14`)
+- **`#TASK-13` — Motor de Gamificação, Metas com Prazo, Streaks e Catálogo de Conquistas:**
+  - **Economia de XP ("Mão na Massa"):** Ganho único por avanço prático (`+15 XP` por missão inédita no Laboratório Guiado, `+100 XP` ao dominar tópico pela 1ª vez com nota >= 70%, `+25 XP` bônus para nota >= 90%; `0 XP` em revisões SRS/dúvidas).
+  - **Níveis e Títulos:** Progressão escalonada (`Iniciante` ➔ `Explorador` ➔ `Praticante` ➔ `Construtor` ➔ `Especialista` / `Mestre`).
+  - **Streaks (Ofensiva Diária):** Controle de `current_streak`, `longest_streak` e `last_study_date` alimentado por estudo inédito ou revisão rápida.
+  - **Metas com Prazo (`Goal Deadline`):** Prazo opcional no `init` e editável depois via comando `goal` (`goal_label`, `target_days`, `deadline_at`).
+  - **Catálogo de 15 Conquistas (Badges):** *Adquirindo Conhecimento*, escala de tópicos (*Primeiro Domínio* [1], *Base Sólida* [5], *Mente Afiada* [10], *Erudito Prático* [25]), evolução/prática (*Salto de Domínio*, *Maestria Impecável* [>=95%], *Mão na Massa* [100% Lab], *Caçador de Bugs* [Debug + Mastered]), sequência (*Faísca Inicial* [3d], *Foco de 10 Dias* [10d], *Disciplina de 50 Dias* [50d], *Lenda dos 100 Dias* [100d]), metas/trilhas (*Sprint Vencida* [<=10d no prazo], *Missão Cumprida* [meta no prazo], *Trilha Completa* [100%]) e retenção (*Memória Blindada* [10 revisões SRS]).
+- **`#TASK-15` — Sistema de Repetição Espaçada (SRS / Ebbinghaus — Algoritmo SM-2):**
+  - Extensão retrocompatível de `Topic` (`easiness_factor`, `interval_days`, `srs_repetitions`, `next_review_at`).
+  - Motor `SpacedRepetitionEngine` agendando revisões periódicas sobre tópicos `MASTERED`, comando `review` na CLI, manutenção do Streak (`0 XP`) e integração com a conquista *Memória Blindada*.
+- **`#TASK-14` — Interface Gráfica / Web Integrada (FastAPI + Web App Leve):**
+  - Servidor Python único (`FastAPI` + `Uvicorn` + HTML/Tailwind/JS moderno + `Mermaid.js`) iniciado via `.\study-agent web` / `python -m study_agent.cli web` (zero dependência de Node.js/npm).
+  - Compartilhamento direto do `core/` e `SessionStore` (`data/`) entre CLI e Web.
+  - Dashboard visual completo: barra de XP/nível, chama de streak, vitrine de badges, termômetro de meta com prazo, árvore de conhecimento interativa, sala de estudo/Laboratório Guiado + Debug e fila de Revisão Rápida (SRS).
 
 ---
 
-## 4. Backlog Futuro (Fase 3: Interface Web & Gamificação Visual)
-- **`#TASK-13` — Gamificação, Streaks e Badges Visuais:** Controle de dias seguidos (streaks), conquistas e níveis visuais integrados aos componentes da UI.
-- **`#TASK-14` — Interface Gráfica / Web:** Dashboard interativo com gráficos de domínio, visualização da árvore de conhecimento e laboratório de comandos interativo.
-- **`#TASK-15` — Sistema de Repetição Espaçada (SRS / Ebbinghaus):** Agendamento automatizado de revisões periódicas de tópicos pré-dominados.
+## 4. Backlog Futuro (Pós-Fase 3)
+- A definir após conclusão da Fase 3.
 
 ---
 
@@ -50,3 +60,6 @@
 - **Decisão 14 (25/11/2026):** Modo Laboratório Guiado estruturado via *Scaffolding* com `GuidedLab` e `LabMission` (checkpoints explícitos `[P/E/D/A]`), somado ao método `Teacher.debug_error` sensível ao sistema operacional do aluno e captura multilinha de stack traces na opção `[E]` da CLI.
 - **Decisão 15 (25/11/2026):** Ergonomia multiplataforma e Windows garantida em 3 camadas: wrapper `study-agent.bat` (força UTF-8 e localiza `.venv` sem depender de `ExecutionPolicy` do PowerShell), empacotamento PEP 621 via `pyproject.toml` (`study-agent` entrypoint) + `__main__.py`, e padronização das mensagens da CLI para `python -m study_agent.cli`.
 - **Decisão 16 (25/11/2026):** Exportação offline determinística via `StudyExporter` (zero custo de API na hora de exportar): persistência de `RecallRecord` em cada tópico avaliado, geração de guia `.md` com blocos retráteis `<details>` para revisão ativa no Obsidian/GitHub, e geração de deck `.txt` com cabeçalhos nativos do Anki 2.1.54+ (`#separator:tab`, `#html:true`, `#deck`, `#tags column:3`).
+- **Decisão 17 (25/11/2026):** Stack da Interface Web (`#TASK-14`) definida como `FastAPI` + Web App leve integrado (`Uvicorn` + HTML/Tailwind/JS moderno + `Mermaid.js`), servida diretamente pelo Python via comando `web` sem necessidade de Node.js/npm e compartilhando o mesmo `SessionStore` JSON com a CLI.
+- **Decisão 18 (25/11/2026):** Design de Gamificação (`#TASK-13`) com separação estrita entre *Hábito* (Streak) e *Prática Real* (XP): revisões rápidas (SRS) mantêm a ofensiva diária acesa nos dias corridos mas concedem `0 XP`, restringindo o ganho de XP ao avanço prático inédito (missões de laboratório e domínio de tópicos). Inclusão de metas temporais opcionais/editáveis (`target_days` / `deadline_at`) e catálogo unificado de conquistas em 6 categorias.
+- **Decisão 19 (25/11/2026):** Sequência de engenharia da Fase 3 definida como "Motores Primeiro, Vitrine Depois" (`#TASK-13` Gamificação ➔ `#TASK-15` SRS ➔ `#TASK-14` Interface Web), garantindo que regras de XP, metas, conquistas e fila de repetição espaçada estejam consolidadas e testadas no `core/` antes da construção do Dashboard Web.

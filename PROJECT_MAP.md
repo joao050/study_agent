@@ -1,8 +1,9 @@
 # PROJECT_MAP.md — AI Study Agent (Tutor Adaptativo)
 
 ## 1. Visão Geral
-Agente inteligente de estudos via terminal (CLI) que atua como um mentor particular adaptativo. Realiza diagnóstico inicial do aluno, monta trilhas e mapas de aprendizado customizados, conduz sessões didáticas com a técnica de Feynman, faz checagem ativa de conhecimento (Active Recall) e mantém acompanhamento de domínio com gamificação leve (barras de progresso e níveis).
-- **Stack:** Python 3.10+, Typer / Click, Rich (Terminal UI), LiteLLM (suporte flexível a Gemini, OpenAI, Claude, Ollama), Pydantic v2 (validação de schemas e structured outputs).
+Agente inteligente de estudos (CLI e, na Fase 3, Interface Web integrada) que atua como um mentor particular adaptativo. Realiza diagnóstico inicial do aluno, monta trilhas e mapas de aprendizado customizados, conduz sessões didáticas (Feynman, Técnico, Prático e Laboratório Guiado com Debugging), faz checagem ativa de conhecimento (Active Recall), exporta resumos/flashcards e evolui na Fase 3 com gamificação orientada à prática, metas com prazo e repetição espaçada (SRS).
+- **Stack Atual (Fases 1 e 2):** Python 3.10+, Typer / Click, Rich (Terminal UI), LiteLLM (Gemini, OpenAI, Claude, Ollama), Pydantic v2.
+- **Stack Planejada (Fase 3):** FastAPI + Uvicorn + HTML/Tailwind/JS moderno + Mermaid.js (servido diretamente pelo Python, compartilhando `core/` e `storage/`).
 - **Como Rodar:** `python -m study_agent.cli`, `.\study-agent` (via `study-agent.bat` no Windows) ou `study-agent` (após `pip install -e .`).
 
 ## 2. Árvore Comentada
@@ -56,6 +57,9 @@ study-agent/
 | Explicações didáticas, laboratório & debug | `study_agent/core/teacher.py` (`explain_topic`, `generate_guided_lab`, `debug_error`) |
 | Testes de absorção & cálculo de pontuação | `study_agent/core/evaluator.py` (`Evaluator`, histórico `RecallRecord`) |
 | Exportação de Resumos & Flashcards Anki | `study_agent/core/exporter.py` (`StudyExporter`, `AnkiCard`, `ExportResult`) |
+| Gamificação, XP, Streaks, Metas & Badges *(Planejado `#TASK-13`)* | `study_agent/core/gamification.py`, `study_agent/models/student.py`, `study_agent/models/curriculum.py` |
+| Repetição Espaçada SRS / SM-2 *(Planejado `#TASK-15`)* | `study_agent/core/srs.py`, `study_agent/models/curriculum.py` |
+| Servidor & Dashboard Web Integrado *(Planejado `#TASK-14`)* | `study_agent/web/app.py`, `study_agent/web/templates/*`, `study_agent/web/static/*` |
 | Schemas do Aluno & Objetivos | `study_agent/models/student.py` |
 | Schemas da Trilha, Laboratório & Debug | `study_agent/models/curriculum.py` (`Curriculum`, `Topic`, `GuidedLab`, `LabMission`, `ErrorDebugResolution`) |
 | Salvar/Recuperar progresso em disco | `study_agent/storage/session_store.py` |

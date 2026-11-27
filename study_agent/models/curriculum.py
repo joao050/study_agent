@@ -163,6 +163,28 @@ class Topic(BaseModel):
         ge=0,
         description="Quantidade de missões práticas concluídas no laboratório guiado",
     )
+    total_lab_missions: int = Field(
+        default=0,
+        ge=0,
+        description="Total de missões do laboratório guiado gerado para este tópico",
+    )
+    rewarded_lab_steps: int = Field(
+        default=0,
+        ge=0,
+        description="Quantidade de missões práticas deste tópico que já concederam XP",
+    )
+    used_debug_assistant: bool = Field(
+        default=False,
+        description="Indica se o assistente de debugging foi acionado durante este tópico",
+    )
+    mastery_xp_awarded: bool = Field(
+        default=False,
+        description="Indica se o XP base (+100) de primeiro domínio já foi concedido",
+    )
+    excellence_xp_awarded: bool = Field(
+        default=False,
+        description="Indica se o bônus de excelência (+25 por nota >= 90%) já foi concedido",
+    )
     recall_history: List[RecallRecord] = Field(
         default_factory=list,
         description="Histórico de avaliações de Active Recall realizadas neste tópico",
@@ -178,6 +200,28 @@ class Curriculum(BaseModel):
     topics: List[Topic] = Field(
         default_factory=list,
         description="Lista ordenada de tópicos a serem cursados"
+    )
+    goal_label: Optional[str] = Field(
+        default=None,
+        description="Descrição personalizada da meta com prazo desta trilha",
+    )
+    target_days: Optional[int] = Field(
+        default=None,
+        ge=1,
+        le=3650,
+        description="Prazo alvo em dias corridos para concluir a trilha",
+    )
+    goal_created_at: Optional[datetime] = Field(
+        default=None,
+        description="Momento em que a meta com prazo foi definida",
+    )
+    deadline_at: Optional[datetime] = Field(
+        default=None,
+        description="Data/hora limite calculada para cumprimento da meta",
+    )
+    goal_completed_at: Optional[datetime] = Field(
+        default=None,
+        description="Data/hora em que todos os tópicos da trilha foram dominados",
     )
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))

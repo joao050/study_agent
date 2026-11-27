@@ -13,6 +13,7 @@ Agente inteligente de estudos via terminal que atua como um mentor particular ad
   - **🧪 Laboratório Guiado Passo a Passo:** Missões executáveis incrementais (*scaffolding*) com *checkpoints* de validação.
 - **🔧 Assistente de Debugging em Tempo Real (`[E]`):** Cole erros ou *stack traces* de múltiplas linhas diretamente do seu terminal para receber a tradução do erro, a causa raiz e o comando corrigido para o seu sistema operacional.
 - **🧠 Checagem Ativa (*Active Recall*):** Perguntas abertas ao final de cada sessão com nota de corte (`>= 70%`) para desbloquear novos tópicos.
+- **🏆 Gamificação "Mão na Massa", Streaks & Metas com Prazo:** Economia de XP focada em prática inédita (`+15 XP` por missão de laboratório, `+100 XP` no 1º domínio e `+25 XP` de excelência), progressão de títulos (`Iniciante` ➔ `Mestre`), ofensiva diária (*Streaks*), metas temporais configuráveis e catálogo de **17 conquistas (Badges)**.
 - **🛡️ Resiliência Multi-Provedor (LiteLLM):** Suporte intercambiável a **Gemini**, **OpenAI**, **Anthropic (Claude)** e **Ollama**, com *retries* automáticos (*backoff exponencial + jitter*) contra erros `503/429`.
 
 ---
@@ -97,7 +98,8 @@ study-agent study
 | :--- | :--- | :--- |
 | `python -m study_agent.cli init` | `.\study-agent init` | Realiza o diagnóstico de nível e gera sua trilha personalizada. |
 | `python -m study_agent.cli study` | `.\study-agent study` | Inicia/retoma a aula do próximo tópico (Feynman, Técnico, Prático ou Laboratório Guiado). |
-| `python -m study_agent.cli status` | `.\study-agent status` | Exibe o painel de progresso geral e tabela de tópicos. |
+| `python -m study_agent.cli status` | `.\study-agent status` | Exibe progresso, nível/XP, ofensiva, meta e conquistas (`--badges` para o catálogo completo). |
+| `python -m study_agent.cli goal` | `.\study-agent goal` | Define, edita ou limpa uma meta com prazo em dias (`--days`, `--label`, `--clear`). |
 | `python -m study_agent.cli map` | `.\study-agent map` | Renderiza a árvore conceitual da trilha (`--mermaid` para código Mermaid). |
 | `python -m study_agent.cli export` | `.\study-agent export` | Exporta guia Markdown (`.md`) e flashcards Anki (`.txt`) na pasta `exports/`. |
 | `python -m study_agent.cli students` | `.\study-agent students` | Lista perfis salvos e alterna entre trilhas (`--switch <ID>`). |

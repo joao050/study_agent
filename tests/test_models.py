@@ -181,3 +181,25 @@ def test_guided_lab_and_error_debug_models():
 
     topic = Topic(id="t_lab", title="Volumes", description="Persistência")
     assert topic.completed_lab_steps == 0
+    assert topic.rewarded_lab_steps == 0
+    assert topic.used_debug_assistant is False
+
+
+def test_legacy_json_retrocompatibility_for_gamification_fields():
+    """Garante que JSONs salvos nas Fases 1/2 (sem campos da Fase 3) carregam sem erro."""
+    legacy_student_json = '{"id": "old_1", "name": "João", "target_subject": "Python"}'
+    student = StudentProfile.model_validate_json(legacy_student_json)
+    assert student.xp == 0
+    assert student.level == 1
+    assert student.level_title == "Iniciante"
+    assert student.current_streak == 0
+    assert student.unlocked_badges == []
+
+    legacy_curr_json = (
+        '{"id": "c_old", "student_id": "old_1", "subject": "Python", '
+        '"overview": "Base", "topics": [{"id": "t1", "title": "Intro", "description": "Desc"}]}'
+    )
+    curr = Curriculum.model_validate_json(legacy_curr_json)
+    assert curr.target_days is None
+    assert curr.deadline_at is None
+    assert curr.topics[0].mastery_xp_awarded is False

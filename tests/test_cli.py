@@ -833,3 +833,19 @@ def test_cli_review_command_empty_up_to_date_and_due_flow(
     mock_store.save_curriculum.assert_called()
 
 
+def test_cli_web_command_invokes_uvicorn():
+    """Verifica que o comando 'web' inicia o servidor Uvicorn com host e porta configurados."""
+    with patch("uvicorn.run") as mock_uvicorn_run:
+        res = runner.invoke(app, ["web", "--host", "127.0.0.1", "--port", "8123", "--no-open"])
+        assert res.exit_code == 0
+        assert "http://127.0.0.1:8123" in res.output
+        mock_uvicorn_run.assert_called_once_with(
+            "study_agent.web.app:app",
+            host="127.0.0.1",
+            port=8123,
+            reload=False,
+            log_level="info",
+        )
+
+
+

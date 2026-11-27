@@ -1,6 +1,6 @@
-# 🧠 AI Study Agent — Tutor Adaptativo & Mentor de Bancada (CLI)
+# 🧠 AI Study Agent — Tutor Adaptativo & Mentor de Bancada (CLI + Web App)
 
-Agente inteligente de estudos via terminal que atua como um mentor particular adaptativo para aprendizado de programação, ferramentas e arquitetura de software.
+Agente inteligente de estudos (Terminal CLI + **Interface Web Integrada**) que atua como um mentor particular adaptativo para aprendizado de programação, ferramentas e arquitetura de software.
 
 ## ✨ Principais Recursos
 
@@ -15,6 +15,7 @@ Agente inteligente de estudos via terminal que atua como um mentor particular ad
 - **🧠 Checagem Ativa (*Active Recall*):** Perguntas abertas ao final de cada sessão com nota de corte (`>= 70%`) para desbloquear novos tópicos.
 - **🏆 Gamificação "Mão na Massa", Streaks & Metas com Prazo:** Economia de XP focada em prática inédita (`+15 XP` por missão de laboratório, `+100 XP` no 1º domínio e `+25 XP` de excelência), progressão de títulos (`Iniciante` ➔ `Mestre`), ofensiva diária (*Streaks*), metas temporais configuráveis e catálogo de **17 conquistas (Badges)**.
 - **🔄 Repetição Espaçada (SRS / Algoritmo SM-2):** Agendamento inteligente de revisões periódicas sobre tópicos dominados para blindar a retenção de longo prazo e manter sua ofensiva diária ativa sem inflar XP.
+- **🖥️ Interface Gráfica / Web Studio Integrado (`FastAPI`):** Dashboard visual completo acessível via `.\study-agent web` (barra de XP/nível, chama de streak, termômetro de metas, árvore `Mermaid.js`, Sala de Estudo/Laboratório/Debug, fila SRS e vitrine de badges), compartilhando a mesma base `data/` da CLI sem depender de Node.js/npm.
 - **🛡️ Resiliência Multi-Provedor (LiteLLM):** Suporte intercambiável a **Gemini**, **OpenAI**, **Anthropic (Claude)** e **Ollama**, com *retries* automáticos (*backoff exponencial + jitter*) contra erros `503/429`.
 
 ---
@@ -98,6 +99,7 @@ study-agent study
 | Comando | Atalho Windows | Descrição |
 | :--- | :--- | :--- |
 | `python -m study_agent.cli init` | `.\study-agent init` | Realiza o diagnóstico de nível e gera sua trilha personalizada. |
+| `python -m study_agent.cli web` | `.\study-agent web` | Inicia o **Dashboard Web Integrado** em `http://127.0.0.1:8000` (`--port`, `--no-open`). |
 | `python -m study_agent.cli study` | `.\study-agent study` | Inicia/retoma a aula do próximo tópico (Feynman, Técnico, Prático ou Laboratório Guiado). |
 | `python -m study_agent.cli review` | `.\study-agent review` | Executa sessão rápida de Repetição Espaçada (SM-2) nos tópicos vencidos (`--limit N`). |
 | `python -m study_agent.cli status` | `.\study-agent status` | Exibe progresso, nível/XP, ofensiva, meta e conquistas (`--badges` para o catálogo completo). |

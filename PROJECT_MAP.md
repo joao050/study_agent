@@ -1,10 +1,9 @@
 # PROJECT_MAP.md — AI Study Agent (Tutor Adaptativo)
 
 ## 1. Visão Geral
-Agente inteligente de estudos (CLI e, na Fase 3, Interface Web integrada) que atua como um mentor particular adaptativo. Realiza diagnóstico inicial do aluno, monta trilhas e mapas de aprendizado customizados, conduz sessões didáticas (Feynman, Técnico, Prático e Laboratório Guiado com Debugging), faz checagem ativa de conhecimento (Active Recall), exporta resumos/flashcards e evolui na Fase 3 com gamificação orientada à prática, metas com prazo e repetição espaçada (SRS).
-- **Stack Atual (Fases 1 e 2):** Python 3.10+, Typer / Click, Rich (Terminal UI), LiteLLM (Gemini, OpenAI, Claude, Ollama), Pydantic v2.
-- **Stack Planejada (Fase 3):** FastAPI + Uvicorn + HTML/Tailwind/JS moderno + Mermaid.js (servido diretamente pelo Python, compartilhando `core/` e `storage/`).
-- **Como Rodar:** `python -m study_agent.cli`, `.\study-agent` (via `study-agent.bat` no Windows) ou `study-agent` (após `pip install -e .`).
+Agente inteligente de estudos (CLI e Interface Web integrada) que atua como um mentor particular adaptativo. Realiza diagnóstico inicial do aluno, monta trilhas e mapas de aprendizado customizados, conduz sessões didáticas (Feynman, Técnico, Prático e Laboratório Guiado com Debugging), faz checagem ativa de conhecimento (Active Recall), exporta resumos/flashcards e conta com gamificação orientada à prática, metas com prazo e repetição espaçada (SRS).
+- **Stack Completa (Fases 1, 2 e 3):** Python 3.10+, Typer / Click, Rich (Terminal UI), FastAPI + Uvicorn + HTML/Tailwind/JS + Mermaid.js (Web Studio integrado), LiteLLM (Gemini, OpenAI, Claude, Ollama), Pydantic v2.
+- **Como Rodar:** `python -m study_agent.cli` (ou `.\study-agent` no Windows) e `.\study-agent web` para abrir o Dashboard Web.
 
 ## 2. Árvore Comentada
 ```text
@@ -32,15 +31,21 @@ study-agent/
 │   │   ├── exporter.py          # Exportação de resumos Markdown e flashcards Anki TSV
 │   │   ├── gamification.py      # Motor de XP prático, níveis, streaks, metas e 17 conquistas
 │   │   └── srs.py               # Motor de repetição espaçada Ebbinghaus / SuperMemo SM-2
-│   └── storage/                 # Camada de persistência local
+│   ├── storage/                 # Camada de persistência local
+│   │   ├── __init__.py
+│   │   └── session_store.py     # Leitura e escrita de perfis e trilhas em JSON local
+│   └── web/                     # Interface Gráfica / Web Studio Integrado (FastAPI)
 │       ├── __init__.py
-│       └── session_store.py     # Leitura e escrita de perfis e trilhas em JSON local
+│       ├── app.py               # Rotas REST, serialização de dashboard e servidor SPA
+│       ├── templates/index.html # Página principal do Dashboard Web
+│       └── static/              # Lógica SPA (app.js) e estilos (styles.css)
 ├── tests/                       # Testes automatizados (pytest)
 │   ├── __init__.py
 │   ├── test_gamification.py     # Testes do motor de XP, streaks, metas e conquistas
 │   ├── test_llm_client.py       # Testes unitários do cliente unificado LiteLLM
 │   ├── test_models.py           # Testes de integridade de schemas Pydantic
-│   └── test_srs.py              # Testes do algoritmo SM-2 e fila de repetição espaçada
+│   ├── test_srs.py              # Testes do algoritmo SM-2 e fila de repetição espaçada
+│   └── test_web.py              # Testes de integração da API FastAPI e SPA Web
 ├── .env.example                 # Exemplo de configuração de variáveis de ambiente
 ├── .gitignore                   # Ignora dados locais, venv, caches e chaves
 ├── pyproject.toml               # Metadados PEP 621 e entrypoint console study-agent
@@ -53,7 +58,7 @@ study-agent/
 ## 3. Mapa por Funcionalidade (Se for X, mexa em Y)
 | Funcionalidade | Arquivo : Função / Classe |
 | :--- | :--- |
-| Comandos de Terminal & Telas | `study_agent/cli.py` (`render_llm_error`, `render_debug_resolution`, `render_gamification_event`, `goal`, `review`, `status --badges` e comandos Typer) |
+| Comandos de Terminal & Telas | `study_agent/cli.py` (`render_llm_error`, `render_debug_resolution`, `render_gamification_event`, `goal`, `review`, `web`, `status --badges` e comandos Typer) |
 | Configuração de Provedores & Chaves | `study_agent/config.py` (`Settings`: chaves, retries e timeouts) |
 | Chamadas unificadas de LLM (Prompt/JSON) | `study_agent/core/llm_client.py` (`LLMClient`, `LLMConnectionError`, `LLMAuthenticationError`) |
 | Perguntas de diagnóstico & cálculo de nível | `study_agent/core/diagnostician.py` |
@@ -63,7 +68,7 @@ study-agent/
 | Exportação de Resumos & Flashcards Anki | `study_agent/core/exporter.py` (`StudyExporter`, `AnkiCard`, `ExportResult`) |
 | Gamificação, XP, Streaks, Metas & Badges | `study_agent/core/gamification.py` (`GamificationEngine`, `BADGE_CATALOG`, `GoalStatus`, `LevelProgress`), `study_agent/models/student.py`, `study_agent/models/curriculum.py` |
 | Repetição Espaçada SRS / SM-2 | `study_agent/core/srs.py` (`SpacedRepetitionEngine`, `SRSReviewResult`, `SRSQueueSummary`), `study_agent/models/curriculum.py` |
-| Servidor & Dashboard Web Integrado *(Planejado `#TASK-14`)* | `study_agent/web/app.py`, `study_agent/web/templates/*`, `study_agent/web/static/*` |
+| Servidor & Dashboard Web Integrado | `study_agent/web/app.py` (`create_app`, `build_interactive_mermaid`), `study_agent/web/templates/index.html`, `study_agent/web/static/app.js`, `study_agent/web/static/styles.css` |
 | Schemas do Aluno & Objetivos | `study_agent/models/student.py` |
 | Schemas da Trilha, Laboratório & Debug | `study_agent/models/curriculum.py` (`Curriculum`, `Topic`, `GuidedLab`, `LabMission`, `ErrorDebugResolution`) |
 | Salvar/Recuperar progresso em disco | `study_agent/storage/session_store.py` |

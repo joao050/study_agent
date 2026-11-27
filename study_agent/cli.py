@@ -1221,5 +1221,48 @@ def export(
     )
 
 
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Endereço IP local para o servidor Web"),
+    port: int = typer.Option(8000, "--port", "-p", help="Porta HTTP para o servidor Web"),
+    open_browser: bool = typer.Option(
+        True,
+        "--open/--no-open",
+        help="Abre automaticamente o Dashboard no navegador padrão",
+    ),
+    reload: bool = typer.Option(
+        False,
+        "--reload",
+        help="Ativa auto-reload do Uvicorn (útil para desenvolvimento)",
+    ),
+) -> None:
+    """Inicia a Interface Gráfica / Web App integrada compartilhando os dados da CLI."""
+    import threading
+    import webbrowser
+    import uvicorn
+
+    url = f"http://{host}:{port}"
+    console.print(
+        Panel(
+            f"🌐 [bold green]Servidor Web Integrado iniciando em:[/bold green] [bold cyan]{url}[/bold cyan]\n"
+            "• [bold]Base compartilhada:[/bold] Mesmos perfis, XP, streaks, metas e trilhas da CLI ([cyan]data/[/cyan])\n"
+            "• Para encerrar o servidor, pressione [bold yellow]Ctrl+C[/bold yellow].",
+            title="🖥️ AI Study Agent — Web Studio",
+            border_style="cyan",
+        )
+    )
+
+    if open_browser:
+        threading.Timer(0.8, lambda: webbrowser.open(url)).start()
+
+    uvicorn.run(
+        "study_agent.web.app:app",
+        host=host,
+        port=port,
+        reload=reload,
+        log_level="info",
+    )
+
+
 if __name__ == "__main__":
     app()

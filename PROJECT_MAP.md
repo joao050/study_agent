@@ -30,7 +30,8 @@ study-agent/
 │   │   ├── teacher.py           # Explicações didáticas, laboratório guiado e debug de erros
 │   │   ├── evaluator.py         # Checagem de absorção (Active Recall) e pontuação de domínio
 │   │   ├── exporter.py          # Exportação de resumos Markdown e flashcards Anki TSV
-│   │   └── gamification.py      # Motor de XP prático, níveis, streaks, metas e 17 conquistas
+│   │   ├── gamification.py      # Motor de XP prático, níveis, streaks, metas e 17 conquistas
+│   │   └── srs.py               # Motor de repetição espaçada Ebbinghaus / SuperMemo SM-2
 │   └── storage/                 # Camada de persistência local
 │       ├── __init__.py
 │       └── session_store.py     # Leitura e escrita de perfis e trilhas em JSON local
@@ -38,7 +39,8 @@ study-agent/
 │   ├── __init__.py
 │   ├── test_gamification.py     # Testes do motor de XP, streaks, metas e conquistas
 │   ├── test_llm_client.py       # Testes unitários do cliente unificado LiteLLM
-│   └── test_models.py           # Testes de integridade de schemas Pydantic
+│   ├── test_models.py           # Testes de integridade de schemas Pydantic
+│   └── test_srs.py              # Testes do algoritmo SM-2 e fila de repetição espaçada
 ├── .env.example                 # Exemplo de configuração de variáveis de ambiente
 ├── .gitignore                   # Ignora dados locais, venv, caches e chaves
 ├── pyproject.toml               # Metadados PEP 621 e entrypoint console study-agent
@@ -51,16 +53,16 @@ study-agent/
 ## 3. Mapa por Funcionalidade (Se for X, mexa em Y)
 | Funcionalidade | Arquivo : Função / Classe |
 | :--- | :--- |
-| Comandos de Terminal & Telas | `study_agent/cli.py` (`render_llm_error`, `render_debug_resolution`, `render_gamification_event`, `goal`, `status --badges` e comandos Typer) |
+| Comandos de Terminal & Telas | `study_agent/cli.py` (`render_llm_error`, `render_debug_resolution`, `render_gamification_event`, `goal`, `review`, `status --badges` e comandos Typer) |
 | Configuração de Provedores & Chaves | `study_agent/config.py` (`Settings`: chaves, retries e timeouts) |
 | Chamadas unificadas de LLM (Prompt/JSON) | `study_agent/core/llm_client.py` (`LLMClient`, `LLMConnectionError`, `LLMAuthenticationError`) |
 | Perguntas de diagnóstico & cálculo de nível | `study_agent/core/diagnostician.py` |
 | Montagem da árvore de estudos & tópicos | `study_agent/core/curriculum_gen.py` |
 | Explicações didáticas, laboratório & debug | `study_agent/core/teacher.py` (`explain_topic`, `generate_guided_lab`, `debug_error`) |
-| Testes de absorção & cálculo de pontuação | `study_agent/core/evaluator.py` (`Evaluator`, histórico `RecallRecord`) |
+| Testes de absorção & cálculo de pontuação | `study_agent/core/evaluator.py` (`Evaluator`, histórico `RecallRecord` e agendamento inicial SRS) |
 | Exportação de Resumos & Flashcards Anki | `study_agent/core/exporter.py` (`StudyExporter`, `AnkiCard`, `ExportResult`) |
 | Gamificação, XP, Streaks, Metas & Badges | `study_agent/core/gamification.py` (`GamificationEngine`, `BADGE_CATALOG`, `GoalStatus`, `LevelProgress`), `study_agent/models/student.py`, `study_agent/models/curriculum.py` |
-| Repetição Espaçada SRS / SM-2 *(Planejado `#TASK-15`)* | `study_agent/core/srs.py`, `study_agent/models/curriculum.py` |
+| Repetição Espaçada SRS / SM-2 | `study_agent/core/srs.py` (`SpacedRepetitionEngine`, `SRSReviewResult`, `SRSQueueSummary`), `study_agent/models/curriculum.py` |
 | Servidor & Dashboard Web Integrado *(Planejado `#TASK-14`)* | `study_agent/web/app.py`, `study_agent/web/templates/*`, `study_agent/web/static/*` |
 | Schemas do Aluno & Objetivos | `study_agent/models/student.py` |
 | Schemas da Trilha, Laboratório & Debug | `study_agent/models/curriculum.py` (`Curriculum`, `Topic`, `GuidedLab`, `LabMission`, `ErrorDebugResolution`) |

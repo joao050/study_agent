@@ -1,6 +1,6 @@
 """Módulo Evaluator: responsável por testes de retenção ativa (Active Recall) e pontuação de domínio."""
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import List, Optional
 from pydantic import BaseModel, Field
 
@@ -171,6 +171,10 @@ class Evaluator:
 
         if evaluation.is_passing or evaluation.score >= passing_score:
             topic.status = TopicStatus.MASTERED
+            # Agenda a 1ª revisão espaçada (+1 dia) caso ainda não possua agendamento SRS
+            if topic.next_review_at is None:
+                topic.interval_days = 1
+                topic.next_review_at = now + timedelta(days=1)
             # Se já tinha nota anterior, calcula média ponderada favorecendo o resultado recente
             if topic.mastery_score > 0:
                 topic.mastery_score = round((topic.mastery_score * 0.3) + (evaluation.score * 0.7), 2)

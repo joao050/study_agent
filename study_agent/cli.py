@@ -25,6 +25,7 @@ from study_agent.core.llm_client import (
     LLMConnectionError,
     LLMResponseValidationError,
 )
+from study_agent.core.srs import SpacedRepetitionEngine
 from study_agent.core.teacher import Teacher
 from study_agent.models.curriculum import (
     Curriculum,
@@ -660,12 +661,26 @@ def status(
     lvl_info = GamificationEngine.calculate_level_progress(student.xp)
     effective_streak = GamificationEngine.get_effective_streak(student)
     goal_info = GamificationEngine.get_goal_status(curriculum)
+    srs_info = SpacedRepetitionEngine.get_queue_summary(curriculum)
 
     goal_line = (
         f"[bold cyan]Meta:[/bold cyan] {goal_info.goal_label} ([yellow]{goal_info.status_label}[/yellow])"
         if goal_info.has_goal
         else "[bold cyan]Meta:[/bold cyan] [dim]Sem prazo definido (use 'goal --days N' para criar)[/dim]"
     )
+
+    if srs_info.due_now_count > 0:
+        srs_line = (
+            f"[bold cyan]Fila SRS:[/bold cyan] 🔔 [bold yellow]{srs_info.due_now_count} revisão(ões) pendente(s)[/bold yellow] "
+            "[dim](execute 'review')[/dim]"
+        )
+    elif srs_info.next_upcoming_at:
+        srs_line = (
+            f"[bold cyan]Fila SRS:[/bold cyan] [green]Em dia[/green] "
+            f"[dim](próxima em {srs_info.next_upcoming_at.strftime('%d/%m/%Y')})[/dim]"
+        )
+    else:
+        srs_line = "[bold cyan]Fila SRS:[/bold cyan] [dim]Aguardando 1º tópico dominado[/dim]"
 
     unlocked_icons = " ".join(
         BADGE_BY_ID[b.badge_id].icon
@@ -688,7 +703,7 @@ def status(
             f"({lvl_info.current_xp}/{lvl_info.next_level_xp} XP) | "
             f"[bold cyan]Ofensiva:[/bold cyan] 🔥 [bold orange1]{effective_streak}d[/bold orange1] "
             f"[dim](recorde: {student.longest_streak}d)[/dim]\n"
-            f"{goal_line}\n"
+            f"{goal_line} | {srs_line}\n"
             f"[bold cyan]Conquistas:[/bold cyan] 🏅 {badges_summary} | "
             f"[bold cyan]Progresso Geral:[/bold cyan] [bold green]{progress_pct}% dominado[/bold green]",
             title="📊 Painel do Estudante",
@@ -776,10 +791,18 @@ def study() -> None:
             break
 
     if not next_topic:
+        due_count = SpacedRepetitionEngine.get_queue_summary(curriculum).due_now_count
+        srs_hint = (
+            f"\n\n🔔 Você tem [bold yellow]{due_count} revisão(ões) espaçada(s)[/bold yellow] na fila! "
+            "Execute: [bold cyan]python -m study_agent.cli review[/bold cyan]"
+            if due_count > 0
+            else ""
+        )
         console.print(
             Panel.fit(
                 "🎉 [bold green]Parabéns! Todos os tópicos da sua trilha foram dominados![/bold green]\n"
-                f"Você concluiu a jornada de [bold cyan]{curriculum.subject}[/bold cyan] com 100% de aproveitamento.",
+                f"Você concluiu a jornada de [bold cyan]{curriculum.subject}[/bold cyan] com 100% de aproveitamento."
+                f"{srs_hint}",
                 border_style="green",
             )
         )
@@ -930,6 +953,135 @@ def study() -> None:
         console.print("🚀 [bold green]Excelente! O próximo tópico da trilha foi desbloqueado.[/bold green]")
     else:
         console.print("💡 [bold yellow]O tópico permanece em andamento. Você pode revisá-lo a qualquer momento.[/bold yellow]")
+
+
+@app.command()
+def review(
+    limit: int = typer.Option(3, "--limit", "-n", help="Quantidade máxima de tópicos para revisar nesta sessão"),
+) -> None:
+    """Conduz uma sessão rápida de Repetição Espaçada (SRS / SM-2) nos tópicos dominados vencidos."""
+    store = get_store()
+    student, curriculum = store.load_active_session()
+
+    if not student or not curriculum:
+        console.print(
+            "[yellow]⚠️ Nenhuma sessão ativa encontrada. "
+            "Execute 'python -m study_agent.cli init' (ou '.\\study-agent init') primeiro.[/yellow]"
+        )
+        return
+
+    queue_summary = SpacedRepetitionEngine.get_queue_summary(curriculum)
+    if queue_summary.total_mastered == 0:
+        console.print(
+            Panel(
+                "[yellow]Você ainda não possui tópicos dominados para revisão espaçada.[/yellow]\n"
+                "Conclua seu primeiro tópico em [bold cyan]python -m study_agent.cli study[/bold cyan]!",
+                title="🔄 Revisão Espaçada (SRS)",
+                border_style="yellow",
+            )
+        )
+        return
+
+    due_topics = SpacedRepetitionEngine.get_due_topics(curriculum)
+    if not due_topics:
+        next_str = (
+            f"\n📅 Próxima janela agendada: [bold cyan]{queue_summary.next_upcoming_at.strftime('%d/%m/%Y às %H:%M UTC')}[/bold cyan]"
+            if queue_summary.next_upcoming_at
+            else ""
+        )
+        console.print(
+            Panel(
+                "🎉 [bold green]Sua memória está 100% em dia![/bold green]\n"
+                "Nenhum tópico dominado precisa de revisão neste momento."
+                f"{next_str}",
+                title="🔄 Fila de Repetição Espaçada (SM-2)",
+                border_style="green",
+            )
+        )
+        return
+
+    batch = due_topics[: max(1, limit)]
+    console.print(
+        Panel(
+            f"Tópicos na fila agora: [bold yellow]{len(due_topics)}[/bold yellow] "
+            f"(revisando até [bold]{len(batch)}[/bold] nesta sessão).\n"
+            "[dim]🔥 Revisões mantêm sua Ofensiva Diária ativa e contam para 'Memória Blindada' (0 XP).[/dim]",
+            title="🧠 Sessão Rápida de Repetição Espaçada (SM-2)",
+            border_style="magenta",
+        )
+    )
+
+    evaluator = Evaluator()
+    for idx, topic in enumerate(batch, start=1):
+        console.print(
+            Panel(
+                f"[bold cyan]Revisão {idx}/{len(batch)}:[/bold cyan] [bold]{topic.title}[/bold]\n"
+                f"[dim]EF atual: {topic.easiness_factor:.2f} • Intervalo anterior: {topic.interval_days}d • "
+                f"Repetições seguidas: {topic.srs_repetitions}[/dim]",
+                border_style="cyan",
+            )
+        )
+
+        try:
+            with console.status("[bold magenta]Formulando pergunta rápida de retenção...[/bold magenta]"):
+                question = evaluator.generate_active_recall_question(topic)
+
+            console.print(
+                Panel(
+                    f"[bold]{question.question}[/bold]\n\n"
+                    f"[dim]💡 Dica: {question.hint or 'Resuma o conceito nuclear com suas palavras.'}[/dim]",
+                    border_style="magenta",
+                )
+            )
+            answer = Prompt.ask("Sua resposta (ou digite 'sair' para pausar a fila)")
+            if answer.strip().lower() in ("sair", "exit", "q"):
+                console.print("[cyan]⏸️ Sessão de revisão pausada. Seu progresso anterior já está salvo.[/cyan]")
+                break
+
+            with console.status("[bold cyan]Verificando retenção e recalculando curva SM-2...[/bold cyan]"):
+                evaluation = evaluator.evaluate_active_recall(question, answer)
+        except LLMClientError as exc:
+            render_llm_error(exc)
+            raise typer.Exit(code=1)
+
+        srs_res, gamif_event = SpacedRepetitionEngine.complete_review_session(
+            student=student,
+            curriculum=curriculum,
+            topic=topic,
+            evaluation=evaluation,
+            question=question,
+        )
+        store.save_student(student)
+        store.save_curriculum(curriculum)
+
+        color = "green" if srs_res.is_retained else "yellow"
+        title_msg = (
+            "✅ Memória Consolidada!"
+            if srs_res.is_retained
+            else "🔄 Reforço Agendado para Amanhã"
+        )
+        next_date_fmt = srs_res.next_review_at.strftime("%d/%m/%Y")
+
+        console.print(
+            Panel(
+                f"Nota da Revisão: [bold]{evaluation.score:.0f}/100[/bold] "
+                f"[dim](Qualidade SM-2: {srs_res.quality}/5)[/dim]\n"
+                f"[bold]Feedback:[/bold] {evaluation.feedback}\n\n"
+                f"📅 [bold]Próxima revisão:[/bold] daqui a [bold cyan]{srs_res.new_interval_days} dia(s)[/bold cyan] ({next_date_fmt}) | "
+                f"[dim]EF: {srs_res.previous_ef:.2f} ➔ {srs_res.new_ef:.2f}[/dim]",
+                title=f"[{color}]{title_msg}[/{color}]",
+                border_style=color,
+            )
+        )
+        render_gamification_event(gamif_event, student)
+
+        if idx < len(batch):
+            try:
+                keep_going = Confirm.ask("Avançar para a próxima revisão da fila?", default=True)
+            except EOFError:
+                keep_going = True
+            if not keep_going:
+                break
 
 
 @app.command()

@@ -185,6 +185,26 @@ class Topic(BaseModel):
         default=False,
         description="Indica se o bônus de excelência (+25 por nota >= 90%) já foi concedido",
     )
+    easiness_factor: float = Field(
+        default=2.5,
+        ge=1.3,
+        le=5.0,
+        description="Fator de facilidade (EF) do algoritmo SM-2 de repetição espaçada",
+    )
+    interval_days: int = Field(
+        default=0,
+        ge=0,
+        description="Intervalo atual em dias até a próxima revisão espaçada",
+    )
+    srs_repetitions: int = Field(
+        default=0,
+        ge=0,
+        description="Quantidade de revisões espaçadas consecutivas aprovadas (SM-2)",
+    )
+    next_review_at: Optional[datetime] = Field(
+        default=None,
+        description="Data/hora agendada para a próxima revisão espaçada (UTC)",
+    )
     recall_history: List[RecallRecord] = Field(
         default_factory=list,
         description="Histórico de avaliações de Active Recall realizadas neste tópico",

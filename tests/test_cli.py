@@ -767,3 +767,69 @@ def test_cli_status_displays_gamification_and_badges_catalog(
         assert "Adquirindo Conhecimento" in res.output
         assert "Memória Blindada" in res.output
 
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Evaluator")
+def test_cli_review_command_empty_up_to_date_and_due_flow(
+    mock_evaluator_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa comando 'review' sem tópicos dominados, com fila em dia e revisando tópico vencido."""
+    from datetime import datetime, timedelta, timezone
+
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    # 1. Nenhum tópico MASTERED ainda
+    res_none = runner.invoke(app, ["review"])
+    assert res_none.exit_code == 0
+    assert "ainda não possui tópicos dominados" in res_none.output
+
+    # 2. Tópico MASTERED mas agendado para o futuro -> memória em dia
+    t1 = sample_curriculum.topics[0]
+    t1.status = TopicStatus.MASTERED
+    t1.next_review_at = datetime.now(timezone.utc) + timedelta(days=5)
+
+    res_ok = runner.invoke(app, ["review"])
+    assert res_ok.exit_code == 0
+    assert "memória está 100% em dia" in res_ok.output
+
+    # 3. Tópico vencido -> executa revisão ativa, recalcula SM-2 e mantém 0 XP
+    t1.next_review_at = datetime.now(timezone.utc) - timedelta(hours=2)
+
+    mock_eval = MagicMock()
+    mock_eval.generate_active_recall_question.return_value = ActiveRecallQuestion(
+        id="q_rev",
+        question="Qual a diferença entre container e imagem?",
+        expected_concepts=["Imagem é template imutável", "Container é instância em execução"],
+    )
+    mock_eval.evaluate_active_recall.return_value = ActiveRecallEvaluation(
+        question_id="q_rev",
+        student_answer="Imagem é o molde read-only e container é o processo rodando.",
+        score=92.0,
+        understood_concepts=["Imutabilidade", "Processo"],
+        missing_or_confused_concepts=[],
+        feedback="Revisão impecável!",
+        is_passing=True,
+    )
+    mock_evaluator_cls.return_value = mock_eval
+
+    res_due = runner.invoke(
+        app,
+        ["review"],
+        input="Imagem é o molde read-only e container é o processo rodando.\n",
+    )
+    assert res_due.exit_code == 0
+    assert "Memória Consolidada!" in res_due.output
+    assert sample_student.xp == 0
+    assert sample_student.total_srs_reviews == 1
+    assert sample_student.current_streak == 1
+    assert t1.srs_repetitions == 1
+    assert t1.interval_days == 1
+    mock_store.save_student.assert_called()
+    mock_store.save_curriculum.assert_called()
+
+

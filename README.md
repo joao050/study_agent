@@ -14,6 +14,7 @@ Agente inteligente de estudos via terminal que atua como um mentor particular ad
 - **🔧 Assistente de Debugging em Tempo Real (`[E]`):** Cole erros ou *stack traces* de múltiplas linhas diretamente do seu terminal para receber a tradução do erro, a causa raiz e o comando corrigido para o seu sistema operacional.
 - **🧠 Checagem Ativa (*Active Recall*):** Perguntas abertas ao final de cada sessão com nota de corte (`>= 70%`) para desbloquear novos tópicos.
 - **🏆 Gamificação "Mão na Massa", Streaks & Metas com Prazo:** Economia de XP focada em prática inédita (`+15 XP` por missão de laboratório, `+100 XP` no 1º domínio e `+25 XP` de excelência), progressão de títulos (`Iniciante` ➔ `Mestre`), ofensiva diária (*Streaks*), metas temporais configuráveis e catálogo de **17 conquistas (Badges)**.
+- **🔄 Repetição Espaçada (SRS / Algoritmo SM-2):** Agendamento inteligente de revisões periódicas sobre tópicos dominados para blindar a retenção de longo prazo e manter sua ofensiva diária ativa sem inflar XP.
 - **🛡️ Resiliência Multi-Provedor (LiteLLM):** Suporte intercambiável a **Gemini**, **OpenAI**, **Anthropic (Claude)** e **Ollama**, com *retries* automáticos (*backoff exponencial + jitter*) contra erros `503/429`.
 
 ---
@@ -98,6 +99,7 @@ study-agent study
 | :--- | :--- | :--- |
 | `python -m study_agent.cli init` | `.\study-agent init` | Realiza o diagnóstico de nível e gera sua trilha personalizada. |
 | `python -m study_agent.cli study` | `.\study-agent study` | Inicia/retoma a aula do próximo tópico (Feynman, Técnico, Prático ou Laboratório Guiado). |
+| `python -m study_agent.cli review` | `.\study-agent review` | Executa sessão rápida de Repetição Espaçada (SM-2) nos tópicos vencidos (`--limit N`). |
 | `python -m study_agent.cli status` | `.\study-agent status` | Exibe progresso, nível/XP, ofensiva, meta e conquistas (`--badges` para o catálogo completo). |
 | `python -m study_agent.cli goal` | `.\study-agent goal` | Define, edita ou limpa uma meta com prazo em dias (`--days`, `--label`, `--clear`). |
 | `python -m study_agent.cli map` | `.\study-agent map` | Renderiza a árvore conceitual da trilha (`--mermaid` para código Mermaid). |

@@ -5,12 +5,9 @@
 - **Objetivo:** Implementar os motores de gamificação/metas (`#TASK-13`) e repetição espaçada (`#TASK-15`) no `core/`, seguidos pelo Web App integrado em FastAPI (`#TASK-14`) compartilhando a mesma base de dados da CLI.
 
 ## 2. Em Andamento
-- Próxima execução da Fase 3: **`#TASK-15` — Sistema de Repetição Espaçada (SRS / Ebbinghaus — Algoritmo SM-2)**.
+- Próxima e última entrega da Fase 3: **`#TASK-14` — Interface Gráfica / Web Integrada (FastAPI + Web App Leve)**.
 
-## 3. Planejadas (Backlog Oficial — Fase 3 | Ordem restante: `#15` ➔ `#14`)
-- **`#TASK-15` — Sistema de Repetição Espaçada (SRS / Ebbinghaus — Algoritmo SM-2):**
-  - Extensão retrocompatível de `Topic` (`easiness_factor`, `interval_days`, `srs_repetitions`, `next_review_at`).
-  - Motor `SpacedRepetitionEngine` agendando revisões periódicas sobre tópicos `MASTERED`, comando `review` na CLI, manutenção do Streak (`0 XP`) e integração com a conquista *Memória Blindada*.
+## 3. Planejadas (Backlog Oficial — Fase 3 | Ordem restante: `#14`)
 - **`#TASK-14` — Interface Gráfica / Web Integrada (FastAPI + Web App Leve):**
   - Servidor Python único (`FastAPI` + `Uvicorn` + HTML/Tailwind/JS moderno + `Mermaid.js`) iniciado via `.\study-agent web` / `python -m study_agent.cli web` (zero dependência de Node.js/npm).
   - Compartilhamento direto do `core/` e `SessionStore` (`data/`) entre CLI e Web.
@@ -24,6 +21,7 @@
 ---
 
 ## 5. Concluídas
+- [x] `#TASK-15` | 27/11/2026 | Motor de Repetição Espaçada SM-2 (`SpacedRepetitionEngine`), campos retrocompatíveis em `Topic`, agendamento automático pós-domínio, comando CLI `review` (mantendo Streak com 0 XP e conquista *Memória Blindada*) e testes | `study_agent/core/srs.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `study_agent/models/curriculum.py`, `study_agent/cli.py`, `README.md`, `tests/test_srs.py`, `tests/test_models.py`, `tests/test_cli.py`
 - [x] `#TASK-13` | 27/11/2026 | Motor de gamificação (XP prático anti-farming, níveis Iniciante..Mestre, streaks locais, metas com prazo e 17 conquistas em 6 categorias), comando CLI goal e vitrine em status --badges com testes | `study_agent/core/gamification.py`, `study_agent/core/__init__.py`, `study_agent/models/student.py`, `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/cli.py`, `README.md`, `tests/test_gamification.py`, `tests/test_models.py`, `tests/test_cli.py`
 - [x] `#TASK-12` | 25/11/2026 | Exportador de resumos Markdown (frontmatter + Mermaid + details de Active Recall) e decks TSV Anki 2.1.54+ com histórico RecallRecord e comando CLI export | `study_agent/core/exporter.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/config.py`, `study_agent/cli.py`, `.gitignore`, `README.md`, `tests/test_exporter.py`, `tests/test_cli.py`
 - [x] `#TASK-11` | 25/11/2026 | Ergonomia de execução no Windows (wrapper study-agent.bat com UTF-8, pyproject.toml, __main__.py, instruções portáteis na CLI e README.md com guia Set-ExecutionPolicy) | `study-agent.bat`, `pyproject.toml`, `study_agent/__main__.py`, `study_agent/cli.py`, `requirements.txt`, `README.md`, `tests/test_cli.py`

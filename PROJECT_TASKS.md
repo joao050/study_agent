@@ -5,15 +5,9 @@
 - **Objetivo:** Implementar os motores de gamificação/metas (`#TASK-13`) e repetição espaçada (`#TASK-15`) no `core/`, seguidos pelo Web App integrado em FastAPI (`#TASK-14`) compartilhando a mesma base de dados da CLI.
 
 ## 2. Em Andamento
-- Planejamento arquitetural da Fase 3 consolidado (próxima execução: `#TASK-13`).
+- Próxima execução da Fase 3: **`#TASK-15` — Sistema de Repetição Espaçada (SRS / Ebbinghaus — Algoritmo SM-2)**.
 
-## 3. Planejadas (Backlog Oficial — Fase 3 | Ordem: `#13` ➔ `#15` ➔ `#14`)
-- **`#TASK-13` — Motor de Gamificação, Metas com Prazo, Streaks e Catálogo de Conquistas:**
-  - **Economia de XP ("Mão na Massa"):** Ganho único por avanço prático (`+15 XP` por missão inédita no Laboratório Guiado, `+100 XP` ao dominar tópico pela 1ª vez com nota >= 70%, `+25 XP` bônus para nota >= 90%; `0 XP` em revisões SRS/dúvidas).
-  - **Níveis e Títulos:** Progressão escalonada (`Iniciante` ➔ `Explorador` ➔ `Praticante` ➔ `Construtor` ➔ `Especialista` / `Mestre`).
-  - **Streaks (Ofensiva Diária):** Controle de `current_streak`, `longest_streak` e `last_study_date` alimentado por estudo inédito ou revisão rápida.
-  - **Metas com Prazo (`Goal Deadline`):** Prazo opcional no `init` e editável depois via comando `goal` (`goal_label`, `target_days`, `deadline_at`).
-  - **Catálogo de 15 Conquistas (Badges):** *Adquirindo Conhecimento*, escala de tópicos (*Primeiro Domínio* [1], *Base Sólida* [5], *Mente Afiada* [10], *Erudito Prático* [25]), evolução/prática (*Salto de Domínio*, *Maestria Impecável* [>=95%], *Mão na Massa* [100% Lab], *Caçador de Bugs* [Debug + Mastered]), sequência (*Faísca Inicial* [3d], *Foco de 10 Dias* [10d], *Disciplina de 50 Dias* [50d], *Lenda dos 100 Dias* [100d]), metas/trilhas (*Sprint Vencida* [<=10d no prazo], *Missão Cumprida* [meta no prazo], *Trilha Completa* [100%]) e retenção (*Memória Blindada* [10 revisões SRS]).
+## 3. Planejadas (Backlog Oficial — Fase 3 | Ordem restante: `#15` ➔ `#14`)
 - **`#TASK-15` — Sistema de Repetição Espaçada (SRS / Ebbinghaus — Algoritmo SM-2):**
   - Extensão retrocompatível de `Topic` (`easiness_factor`, `interval_days`, `srs_repetitions`, `next_review_at`).
   - Motor `SpacedRepetitionEngine` agendando revisões periódicas sobre tópicos `MASTERED`, comando `review` na CLI, manutenção do Streak (`0 XP`) e integração com a conquista *Memória Blindada*.
@@ -30,6 +24,7 @@
 ---
 
 ## 5. Concluídas
+- [x] `#TASK-13` | 27/11/2026 | Motor de gamificação (XP prático anti-farming, níveis Iniciante..Mestre, streaks locais, metas com prazo e 17 conquistas em 6 categorias), comando CLI goal e vitrine em status --badges com testes | `study_agent/core/gamification.py`, `study_agent/core/__init__.py`, `study_agent/models/student.py`, `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/cli.py`, `README.md`, `tests/test_gamification.py`, `tests/test_models.py`, `tests/test_cli.py`
 - [x] `#TASK-12` | 25/11/2026 | Exportador de resumos Markdown (frontmatter + Mermaid + details de Active Recall) e decks TSV Anki 2.1.54+ com histórico RecallRecord e comando CLI export | `study_agent/core/exporter.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/config.py`, `study_agent/cli.py`, `.gitignore`, `README.md`, `tests/test_exporter.py`, `tests/test_cli.py`
 - [x] `#TASK-11` | 25/11/2026 | Ergonomia de execução no Windows (wrapper study-agent.bat com UTF-8, pyproject.toml, __main__.py, instruções portáteis na CLI e README.md com guia Set-ExecutionPolicy) | `study-agent.bat`, `pyproject.toml`, `study_agent/__main__.py`, `study_agent/cli.py`, `requirements.txt`, `README.md`, `tests/test_cli.py`
 - [x] `#TASK-10` | 25/11/2026 | Modo Laboratório Guiado passo a passo (GuidedLab/LabMission) e Assistente de Debugging em tempo real (debug_error + opção [E] multilinha na CLI) com testes | `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/core/teacher.py`, `study_agent/cli.py`, `tests/test_models.py`, `tests/test_teacher.py`, `tests/test_cli.py`

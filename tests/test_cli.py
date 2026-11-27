@@ -707,3 +707,63 @@ def test_cli_export_invalid_format_returns_error_code(
         res = runner.invoke(app, ["export", "--format", "formato_invalido"])
         assert res.exit_code == 1
         assert "Formato inválido" in res.output
+
+
+def test_cli_goal_set_interactive_and_clear(
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa comando 'goal' via flags (--days, --label), modo interativo e remoção (--clear)."""
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        # Definir meta por flags
+        res_set = runner.invoke(
+            app, ["goal", "--days", "7", "--label", "Dominar Docker para Deploy"]
+        )
+        assert res_set.exit_code == 0
+        assert "Meta Atualizada com Sucesso" in res_set.output
+        assert sample_curriculum.target_days == 7
+        assert sample_curriculum.goal_label == "Dominar Docker para Deploy"
+        assert sample_curriculum.deadline_at is not None
+
+        # Prazo inválido (< 1)
+        res_bad = runner.invoke(app, ["goal", "--days", "0"])
+        assert res_bad.exit_code == 1
+
+        # Edição interativa
+        res_inter = runner.invoke(app, ["goal"], input="10\nMeta Ajustada\n")
+        assert res_inter.exit_code == 0
+        assert sample_curriculum.target_days == 10
+        assert sample_curriculum.goal_label == "Meta Ajustada"
+
+        # Limpar meta com --clear
+        res_clear = runner.invoke(app, ["goal", "--clear"])
+        assert res_clear.exit_code == 0
+        assert sample_curriculum.target_days is None
+        assert sample_curriculum.deadline_at is None
+
+
+def test_cli_status_displays_gamification_and_badges_catalog(
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa exibição de XP, patente, streak e catálogo completo em 'status --badges'."""
+    sample_student.xp = 180
+    sample_student.level = 2
+    sample_student.level_title = "Explorador"
+
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        res = runner.invoke(app, ["status", "--badges"])
+        assert res.exit_code == 0
+        assert "Explorador" in res.output
+        assert "Catálogo de Conquistas" in res.output
+        assert "Adquirindo Conhecimento" in res.output
+        assert "Memória Blindada" in res.output
+

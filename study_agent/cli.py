@@ -13,6 +13,12 @@ from study_agent.core.curriculum_gen import CurriculumGenerator
 from study_agent.core.diagnostician import Diagnostician
 from study_agent.core.evaluator import Evaluator
 from study_agent.core.exporter import StudyExporter
+from study_agent.core.gamification import (
+    BADGE_BY_ID,
+    BADGE_CATALOG,
+    GamificationEngine,
+    GamificationEvent,
+)
 from study_agent.core.llm_client import (
     LLMAuthenticationError,
     LLMClientError,
@@ -21,6 +27,7 @@ from study_agent.core.llm_client import (
 )
 from study_agent.core.teacher import Teacher
 from study_agent.models.curriculum import (
+    Curriculum,
     ErrorDebugResolution,
     ExplanationStyle,
     Topic,
@@ -144,6 +151,50 @@ def render_debug_resolution(resolution: ErrorDebugResolution) -> None:
     )
 
 
+def render_gamification_event(event: GamificationEvent, student: StudentProfile) -> None:
+    """Exibe painel visual de recompensas (XP ganho, subida de nível, streak e novas conquistas)."""
+    if not event.has_rewards and not event.streak_updated:
+        return
+
+    lines: list[str] = []
+    lvl_info = GamificationEngine.calculate_level_progress(student.xp)
+
+    if event.xp_gained > 0:
+        for item in event.xp_breakdown:
+            lines.append(f"⚡ [bold green]{item}[/bold green]")
+        lines.append(
+            f"[dim]Progresso de Nível: Nv. {lvl_info.level} ({lvl_info.title}) • "
+            f"{lvl_info.current_xp}/{lvl_info.next_level_xp} XP ({lvl_info.progress_pct:.0f}%)[/dim]"
+        )
+
+    if event.leveled_up:
+        lines.append(
+            f"🎉 [bold yellow]LEVEL UP![/bold yellow] Você avançou do Nível {event.previous_level} "
+            f"para [bold cyan]Nível {event.new_level} — {event.new_title}[/bold cyan]!"
+        )
+
+    if event.streak_updated:
+        lines.append(
+            f"🔥 [bold orange1]Ofensiva Diária Ativa:[/bold orange1] "
+            f"[bold]{event.current_streak} dia(s) consecutivo(s)[/bold]!"
+        )
+
+    if event.newly_unlocked_badges:
+        if lines:
+            lines.append("")
+        lines.append("🏅 [bold magenta]Nova(s) Conquista(s) Desbloqueada(s):[/bold magenta]")
+        for badge in event.newly_unlocked_badges:
+            lines.append(f"  • {badge.icon} [bold]{badge.title}[/bold] — [dim]{badge.description}[/dim]")
+
+    console.print(
+        Panel(
+            "\n".join(lines),
+            title="🌟 Evolução & Conquistas",
+            border_style="gold1",
+        )
+    )
+
+
 def _handle_error_debugging_flow(
     teacher: Teacher,
     student: StudentProfile,
@@ -168,6 +219,7 @@ def _handle_error_debugging_flow(
                 command_attempted=command_attempted,
                 error_output=error_output,
             )
+        GamificationEngine.record_debug_usage(topic)
         render_debug_resolution(resolution)
     except LLMClientError as exc:
         render_llm_error(exc)
@@ -177,10 +229,14 @@ def _run_guided_lab_flow(
     teacher: Teacher,
     student: StudentProfile,
     topic: Topic,
+    curriculum: Optional[Curriculum] = None,
 ) -> str:
     """Conduz uma sessão prática passo a passo com checkpoints e suporte a debugging."""
     with console.status("[bold magenta]Montando seu laboratório prático passo a passo...[/bold magenta]"):
         lab = teacher.generate_guided_lab(topic=topic, student=student)
+
+    total = len(lab.missions)
+    topic.total_lab_missions = max(topic.total_lab_missions, total)
 
     prereq_line = (
         f"\n\n[bold yellow]🔎 Checagem prévia:[/bold yellow] {lab.prerequisites_check}"
@@ -195,7 +251,6 @@ def _run_guided_lab_flow(
         )
     )
 
-    total = len(lab.missions)
     summary_parts = [f"# {topic.title}\n\n{lab.intro_brief}"]
 
     for mission in lab.missions:
@@ -230,7 +285,15 @@ def _run_guided_lab_flow(
 
             if choice in ("p", "proximo", "próximo", "ok", ""):
                 topic.completed_lab_steps = max(topic.completed_lab_steps, mission.step_number)
-                console.print(f"[green]✔️ Missão {mission.step_number}/{total} validada![/green]")
+                lab_event = GamificationEngine.award_lab_mission_xp(
+                    student=student,
+                    topic=topic,
+                    curriculum=curriculum,
+                )
+                xp_tag = f" (+{lab_event.xp_gained} XP ⚡)" if lab_event.xp_gained > 0 else ""
+                console.print(f"[green]✔️ Missão {mission.step_number}/{total} validada!{xp_tag}[/green]")
+                if lab_event.leveled_up or lab_event.newly_unlocked_badges:
+                    render_gamification_event(lab_event, student)
                 break
             if choice in ("e", "erro"):
                 _handle_error_debugging_flow(
@@ -268,6 +331,7 @@ def _run_interactive_study_menu(
     student: StudentProfile,
     topic: Topic,
     explanation: str,
+    curriculum: Optional[Curriculum] = None,
 ) -> None:
     """Menu interativo pós-aula com suporte a dúvidas, reporte de erro e laboratório prático."""
     while True:
@@ -305,7 +369,12 @@ def _run_interactive_study_menu(
             )
         elif action in ("l", "lab", "laboratorio", "laboratório"):
             try:
-                _run_guided_lab_flow(teacher=teacher, student=student, topic=topic)
+                _run_guided_lab_flow(
+                    teacher=teacher,
+                    student=student,
+                    topic=topic,
+                    curriculum=curriculum,
+                )
             except LLMClientError as exc:
                 render_llm_error(exc)
         else:
@@ -328,6 +397,8 @@ def version() -> None:
 def init(
     name: Optional[str] = typer.Option(None, "--name", "-n", help="Nome do estudante"),
     subject: Optional[str] = typer.Option(None, "--subject", "-s", help="Assunto de estudo"),
+    days: Optional[int] = typer.Option(None, "--days", "-d", help="Prazo opcional em dias para concluir a meta"),
+    goal: Optional[str] = typer.Option(None, "--goal", "-g", help="Descrição opcional da meta com prazo"),
 ) -> None:
     """Inicia uma nova jornada de estudos com diagnóstico pedagógico e geração de trilha."""
     console.print(
@@ -430,16 +501,51 @@ def init(
         render_llm_error(exc)
         raise typer.Exit(code=1)
 
+    # Meta opcional com prazo
+    total_estimated_mins = sum(t.estimated_minutes for t in curriculum.topics)
+    suggested_days = max(1, round(total_estimated_mins / max(15, minutes)))
+
+    chosen_days = days
+    if chosen_days is None:
+        try:
+            chosen_days = IntPrompt.ask(
+                f"⏳ Deseja definir um prazo em dias para concluir esta meta? "
+                f"(sugestão p/ seu ritmo: ~{suggested_days}d | 0 para sem prazo)",
+                default=0,
+            )
+        except EOFError:
+            chosen_days = 0
+
+    if chosen_days and chosen_days > 0:
+        default_label = goal or f"Concluir {curriculum.subject} em {chosen_days} dias"
+        if goal is not None:
+            chosen_label = goal
+        else:
+            try:
+                chosen_label = Prompt.ask("🏁 Como deseja chamar esta meta?", default=default_label)
+            except EOFError:
+                chosen_label = default_label
+        GamificationEngine.set_goal(curriculum, target_days=chosen_days, goal_label=chosen_label)
+
+    onboarding_event = GamificationEngine.record_onboarding(profile, curriculum=curriculum)
+
     # Persistência
     store = get_store()
     store.save_student(profile)
     store.save_curriculum(curriculum)
     store.set_current_session(profile.id, curriculum.id)
 
+    render_gamification_event(onboarding_event, profile)
+
+    goal_line = ""
+    if curriculum.target_days and curriculum.deadline_at:
+        deadline_fmt = curriculum.deadline_at.strftime("%d/%m/%Y")
+        goal_line = f"\n🏁 Meta ativa: [bold yellow]{curriculum.goal_label}[/bold yellow] (até {deadline_fmt})"
+
     console.print(
         Panel.fit(
             f"✅ [bold green]Trilha criada com sucesso para {profile.name}![/bold green]\n"
-            f"Assunto: [bold]{curriculum.subject}[/bold] ({len(curriculum.topics)} tópicos mapeados)\n\n"
+            f"Assunto: [bold]{curriculum.subject}[/bold] ({len(curriculum.topics)} tópicos mapeados){goal_line}\n\n"
             "Para iniciar o estudo do primeiro tópico, execute:\n"
             "  [bold cyan]python -m study_agent.cli study[/bold cyan]\n"
             "  [dim](No Windows, você também pode usar: .\\study-agent study)[/dim]",
@@ -449,8 +555,96 @@ def init(
 
 
 @app.command()
-def status() -> None:
-    """Exibe o progresso atual do estudante na trilha de estudos ativa."""
+def goal(
+    days: Optional[int] = typer.Option(None, "--days", "-d", help="Prazo em dias corridos para concluir a trilha"),
+    label: Optional[str] = typer.Option(None, "--label", "-l", help="Descrição personalizada da meta"),
+    clear: bool = typer.Option(False, "--clear", "-c", help="Remove o prazo da trilha ativa"),
+) -> None:
+    """Define, edita ou consulta a meta com prazo (Goal Deadline) da trilha ativa."""
+    store = get_store()
+    student, curriculum = store.load_active_session()
+
+    if not student or not curriculum:
+        console.print(
+            "[yellow]⚠️ Nenhuma sessão ativa encontrada.[/yellow]\n"
+            "Execute [bold cyan]python -m study_agent.cli init[/bold cyan] "
+            "[dim](ou .\\study-agent init)[/dim] para começar uma nova trilha."
+        )
+        return
+
+    if clear:
+        GamificationEngine.clear_goal(curriculum)
+        store.save_curriculum(curriculum)
+        console.print(
+            Panel(
+                f"Prazo removido da trilha [bold cyan]{curriculum.subject}[/bold cyan].\n"
+                "Você continua estudando no seu próprio ritmo!",
+                title="🕊️ Meta sem Prazo",
+                border_style="cyan",
+            )
+        )
+        return
+
+    if days is not None:
+        if days < 1:
+            console.print("[red]❌ O prazo deve ser de pelo menos 1 dia (ou use --clear para remover).[/red]")
+            raise typer.Exit(code=1)
+        goal_status = GamificationEngine.set_goal(curriculum, target_days=days, goal_label=label)
+        store.save_curriculum(curriculum)
+    elif label is not None and curriculum.target_days:
+        curriculum.goal_label = label.strip() or curriculum.goal_label
+        store.save_curriculum(curriculum)
+        goal_status = GamificationEngine.get_goal_status(curriculum)
+    else:
+        current_status = GamificationEngine.get_goal_status(curriculum)
+        if current_status.has_goal and current_status.deadline_at:
+            console.print(
+                Panel(
+                    f"• [bold]Meta Atual:[/bold] {current_status.goal_label}\n"
+                    f"• [bold]Prazo:[/bold] {current_status.target_days} dia(s) "
+                    f"(até {current_status.deadline_at.strftime('%d/%m/%Y')})\n"
+                    f"• [bold]Status:[/bold] {current_status.status_label}",
+                    title="🏁 Meta Atual da Trilha",
+                    border_style="yellow",
+                )
+            )
+        new_days = IntPrompt.ask(
+            "⏳ Informe o novo prazo em dias (ou digite 0 para remover o prazo)",
+            default=curriculum.target_days or 7,
+        )
+        if new_days <= 0:
+            GamificationEngine.clear_goal(curriculum)
+            store.save_curriculum(curriculum)
+            console.print("[cyan]🕊️ Prazo removido com sucesso.[/cyan]")
+            return
+        default_lbl = label or curriculum.goal_label or f"Concluir {curriculum.subject} em {new_days} dias"
+        new_label = Prompt.ask("🏁 Descrição da meta", default=default_lbl)
+        goal_status = GamificationEngine.set_goal(curriculum, target_days=new_days, goal_label=new_label)
+        store.save_curriculum(curriculum)
+
+    deadline_str = goal_status.deadline_at.strftime("%d/%m/%Y") if goal_status.deadline_at else "-"
+    pace_line = (
+        f"\n• [bold]Ritmo sugerido:[/bold] ~{goal_status.recommended_topics_per_day} tópico(s)/dia"
+        if goal_status.recommended_topics_per_day
+        else ""
+    )
+    console.print(
+        Panel(
+            f"• [bold]Meta:[/bold] [yellow]{goal_status.goal_label}[/yellow]\n"
+            f"• [bold]Prazo:[/bold] {goal_status.target_days} dia(s) (data limite: [bold]{deadline_str}[/bold])\n"
+            f"• [bold]Termômetro:[/bold] {goal_status.status_label} • {goal_status.progress_pct}% concluído"
+            f"{pace_line}",
+            title="✅ Meta Atualizada com Sucesso",
+            border_style="green",
+        )
+    )
+
+
+@app.command()
+def status(
+    badges: bool = typer.Option(False, "--badges", "-b", help="Exibe a vitrine completa de conquistas (badges)")
+) -> None:
+    """Exibe o progresso atual, nível de XP, ofensiva diária, meta e conquistas do estudante."""
     store = get_store()
     student, curriculum = store.load_active_session()
 
@@ -463,6 +657,26 @@ def status() -> None:
         return
 
     progress_pct = curriculum.calculate_overall_progress()
+    lvl_info = GamificationEngine.calculate_level_progress(student.xp)
+    effective_streak = GamificationEngine.get_effective_streak(student)
+    goal_info = GamificationEngine.get_goal_status(curriculum)
+
+    goal_line = (
+        f"[bold cyan]Meta:[/bold cyan] {goal_info.goal_label} ([yellow]{goal_info.status_label}[/yellow])"
+        if goal_info.has_goal
+        else "[bold cyan]Meta:[/bold cyan] [dim]Sem prazo definido (use 'goal --days N' para criar)[/dim]"
+    )
+
+    unlocked_icons = " ".join(
+        BADGE_BY_ID[b.badge_id].icon
+        for b in student.unlocked_badges
+        if b.badge_id in BADGE_BY_ID
+    )
+    badges_summary = (
+        f"{len(student.unlocked_badges)}/{len(BADGE_CATALOG)} {unlocked_icons}".strip()
+        if student.unlocked_badges
+        else f"0/{len(BADGE_CATALOG)} [dim](use 'status --badges' para ver o catálogo)[/dim]"
+    )
 
     console.print(
         Panel(
@@ -470,11 +684,31 @@ def status() -> None:
             f"[bold cyan]Trilha:[/bold cyan] {curriculum.subject}\n"
             f"[bold cyan]Nível:[/bold cyan] {student.current_level.value.title()} ➔ {student.target_level.value.title()} | "
             f"[bold cyan]Ritmo:[/bold cyan] {student.pace.value.title()} ({student.daily_available_minutes} min/dia)\n"
+            f"[bold cyan]Patente & XP:[/bold cyan] [bold yellow]Nv. {lvl_info.level} • {lvl_info.title}[/bold yellow] "
+            f"({lvl_info.current_xp}/{lvl_info.next_level_xp} XP) | "
+            f"[bold cyan]Ofensiva:[/bold cyan] 🔥 [bold orange1]{effective_streak}d[/bold orange1] "
+            f"[dim](recorde: {student.longest_streak}d)[/dim]\n"
+            f"{goal_line}\n"
+            f"[bold cyan]Conquistas:[/bold cyan] 🏅 {badges_summary} | "
             f"[bold cyan]Progresso Geral:[/bold cyan] [bold green]{progress_pct}% dominado[/bold green]",
             title="📊 Painel do Estudante",
             border_style="cyan",
         )
     )
+
+    if badges:
+        badge_table = Table(title="🏅 Catálogo de Conquistas", show_header=True, header_style="bold gold1")
+        badge_table.add_column("Status", width=14)
+        badge_table.add_column("Conquista", min_width=24)
+        badge_table.add_column("Critério", min_width=32)
+
+        for b_def in BADGE_CATALOG:
+            unlocked = student.has_badge(b_def.id)
+            st_text = "[green]✅ Conquistada[/green]" if unlocked else "[dim]🔒 Bloqueada[/dim]"
+            title_fmt = f"{b_def.icon} [bold]{b_def.title}[/bold]" if unlocked else f"[dim]{b_def.icon} {b_def.title}[/dim]"
+            badge_table.add_row(st_text, title_fmt, b_def.description)
+
+        console.print(badge_table)
 
     table = Table(title="🗺️ Tópicos da Trilha", show_header=True, header_style="bold magenta")
     table.add_column("#", style="dim", width=4)
@@ -582,6 +816,7 @@ def study() -> None:
                 teacher=teacher,
                 student=student,
                 topic=next_topic,
+                curriculum=curriculum,
             )
         except LLMClientError as exc:
             render_llm_error(exc)
@@ -618,6 +853,7 @@ def study() -> None:
             student=student,
             topic=next_topic,
             explanation=explanation,
+            curriculum=curriculum,
         )
 
     # Checagem ativa (Active Recall)
@@ -648,6 +884,7 @@ def study() -> None:
             evaluation = evaluator.evaluate_active_recall(recall_question, student_answer)
     except LLMClientError as exc:
         next_topic.status = TopicStatus.IN_PROGRESS
+        store.save_student(student)
         store.save_curriculum(curriculum)
         render_llm_error(exc)
         console.print("[dim]💾 Seu progresso parcial neste tópico foi salvo automaticamente.[/dim]")
@@ -668,10 +905,26 @@ def study() -> None:
         )
     )
 
-    # Atualiza status do tópico, registra histórico de Active Recall e salva trilha
+    # Atualiza status do tópico, gamificação (XP, streak, metas e conquistas) e salva sessão
+    was_mastered_before = next_topic.status == TopicStatus.MASTERED
+    previous_best_score = max(
+        (r.score for r in next_topic.recall_history),
+        default=next_topic.mastery_score,
+    )
     evaluator.update_topic_mastery(next_topic, evaluation, question=recall_question)
     curriculum.update_topic_statuses()
+    gamification_event = GamificationEngine.process_topic_evaluation(
+        student=student,
+        curriculum=curriculum,
+        topic=next_topic,
+        evaluation=evaluation,
+        was_mastered_before=was_mastered_before,
+        previous_score=previous_best_score,
+    )
+    store.save_student(student)
     store.save_curriculum(curriculum)
+
+    render_gamification_event(gamification_event, student)
 
     if evaluation.is_passing:
         console.print("🚀 [bold green]Excelente! O próximo tópico da trilha foi desbloqueado.[/bold green]")

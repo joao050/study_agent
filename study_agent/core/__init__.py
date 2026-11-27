@@ -20,6 +20,11 @@ from study_agent.core.llm_client import (
     LLMConnectionError,
     LLMResponseValidationError,
 )
+from study_agent.core.srs import (
+    SRSQueueSummary,
+    SRSReviewResult,
+    SpacedRepetitionEngine,
+)
 from study_agent.core.teacher import Teacher
 
 __all__ = [
@@ -43,4 +48,7 @@ __all__ = [
     "GamificationEngine",
     "BADGE_CATALOG",
     "BADGE_BY_ID",
+    "SpacedRepetitionEngine",
+    "SRSReviewResult",
+    "SRSQueueSummary",
 ]

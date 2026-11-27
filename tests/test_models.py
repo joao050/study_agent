@@ -203,3 +203,7 @@ def test_legacy_json_retrocompatibility_for_gamification_fields():
     assert curr.target_days is None
     assert curr.deadline_at is None
     assert curr.topics[0].mastery_xp_awarded is False
+    assert curr.topics[0].easiness_factor == 2.5
+    assert curr.topics[0].interval_days == 0
+    assert curr.topics[0].srs_repetitions == 0
+    assert curr.topics[0].next_review_at is None

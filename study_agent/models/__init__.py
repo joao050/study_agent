@@ -13,14 +13,18 @@ from study_agent.models.curriculum import (
     TopicStatus,
 )
 from study_agent.models.student import (
+    BadgeCategory,
     DiagnosticAnswer,
     DiagnosticQuestion,
     KnowledgeLevel,
     StudentProfile,
     StudyPace,
+    UnlockedBadge,
 )
 
 __all__ = [
+    "BadgeCategory",
+    "UnlockedBadge",
     "KnowledgeLevel",
     "StudyPace",
     "DiagnosticQuestion",

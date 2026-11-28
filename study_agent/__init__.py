@@ -1,3 +1,3 @@
-"""AI Study Agent - Tutor particular adaptativo em linha de comando."""
+"""AI Study Agent - Tutor particular adaptativo (CLI + Web Studio integrado)."""
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"

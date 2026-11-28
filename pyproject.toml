@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "study-agent"
-version = "0.1.0"
-description = "Tutor particular adaptativo via CLI com Técnica de Feynman, Laboratório Guiado, Debugging em Tempo Real e Active Recall."
+version = "0.3.0"
+description = "Tutor particular adaptativo (CLI + Web App integrado) com Técnica de Feynman, Laboratório Guiado, Debugging, Gamificação e Repetição Espaçada (SM-2)."
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -15,6 +15,9 @@ dependencies = [
     "pydantic>=2.7.0",
     "pydantic-settings>=2.2.0",
     "python-dotenv>=1.0.0",
+    "fastapi>=0.111.0",
+    "uvicorn>=0.30.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]

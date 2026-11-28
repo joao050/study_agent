@@ -1,26 +1,14 @@
 # PROJECT_TASKS.md — Registro Vivo de Tarefas (AI Study Agent)
 
 ## 1. Fase Atual
-- **Fase:** Fase 3 — Gamificação, Repetição Espaçada (SRS) & Interface Web Integrada 🚀
-- **Objetivo:** Implementar os motores de gamificação/metas (`#TASK-13`) e repetição espaçada (`#TASK-15`) no `core/`, seguidos pelo Web App integrado em FastAPI (`#TASK-14`) compartilhando a mesma base de dados da CLI.
+- **Fase:** Fase 3 Concluída ✅ — Gamificação, Repetição Espaçada (SRS) & Interface Web Integrada 🚀
+- **Objetivo:** Todas as entregas das Fases 1, 2 e 3 (`#TASK-01` a `#TASK-15`) implementadas, integradas entre CLI e Web e cobertas por testes automatizados.
 
 ## 2. Em Andamento
-- Planejamento arquitetural da Fase 3 consolidado (próxima execução: `#TASK-13`).
+- Nenhuma tarefa pendente (Fase 3 100% entregue; aguardando definição de próximos passos ou release na `main`).
 
-## 3. Planejadas (Backlog Oficial — Fase 3 | Ordem: `#13` ➔ `#15` ➔ `#14`)
-- **`#TASK-13` — Motor de Gamificação, Metas com Prazo, Streaks e Catálogo de Conquistas:**
-  - **Economia de XP ("Mão na Massa"):** Ganho único por avanço prático (`+15 XP` por missão inédita no Laboratório Guiado, `+100 XP` ao dominar tópico pela 1ª vez com nota >= 70%, `+25 XP` bônus para nota >= 90%; `0 XP` em revisões SRS/dúvidas).
-  - **Níveis e Títulos:** Progressão escalonada (`Iniciante` ➔ `Explorador` ➔ `Praticante` ➔ `Construtor` ➔ `Especialista` / `Mestre`).
-  - **Streaks (Ofensiva Diária):** Controle de `current_streak`, `longest_streak` e `last_study_date` alimentado por estudo inédito ou revisão rápida.
-  - **Metas com Prazo (`Goal Deadline`):** Prazo opcional no `init` e editável depois via comando `goal` (`goal_label`, `target_days`, `deadline_at`).
-  - **Catálogo de 15 Conquistas (Badges):** *Adquirindo Conhecimento*, escala de tópicos (*Primeiro Domínio* [1], *Base Sólida* [5], *Mente Afiada* [10], *Erudito Prático* [25]), evolução/prática (*Salto de Domínio*, *Maestria Impecável* [>=95%], *Mão na Massa* [100% Lab], *Caçador de Bugs* [Debug + Mastered]), sequência (*Faísca Inicial* [3d], *Foco de 10 Dias* [10d], *Disciplina de 50 Dias* [50d], *Lenda dos 100 Dias* [100d]), metas/trilhas (*Sprint Vencida* [<=10d no prazo], *Missão Cumprida* [meta no prazo], *Trilha Completa* [100%]) e retenção (*Memória Blindada* [10 revisões SRS]).
-- **`#TASK-15` — Sistema de Repetição Espaçada (SRS / Ebbinghaus — Algoritmo SM-2):**
-  - Extensão retrocompatível de `Topic` (`easiness_factor`, `interval_days`, `srs_repetitions`, `next_review_at`).
-  - Motor `SpacedRepetitionEngine` agendando revisões periódicas sobre tópicos `MASTERED`, comando `review` na CLI, manutenção do Streak (`0 XP`) e integração com a conquista *Memória Blindada*.
-- **`#TASK-14` — Interface Gráfica / Web Integrada (FastAPI + Web App Leve):**
-  - Servidor Python único (`FastAPI` + `Uvicorn` + HTML/Tailwind/JS moderno + `Mermaid.js`) iniciado via `.\study-agent web` / `python -m study_agent.cli web` (zero dependência de Node.js/npm).
-  - Compartilhamento direto do `core/` e `SessionStore` (`data/`) entre CLI e Web.
-  - Dashboard visual completo: barra de XP/nível, chama de streak, vitrine de badges, termômetro de meta com prazo, árvore de conhecimento interativa, sala de estudo/Laboratório Guiado + Debug e fila de Revisão Rápida (SRS).
+## 3. Planejadas (Backlog Oficial — Fase 3)
+- *Todas as tarefas da Fase 3 (`#TASK-13`, `#TASK-15` e `#TASK-14`) foram concluídas!*
 
 ---
 
@@ -30,6 +18,9 @@
 ---
 
 ## 5. Concluídas
+- [x] `#TASK-14` | 27/11/2026 | Interface Gráfica / Web Studio Integrado em FastAPI + Uvicorn + SPA moderna (`index.html`, `app.js`, `styles.css` com Tailwind, Marked e Mermaid.js), comando CLI `web`, compartilhamento direto do `SessionStore` e testes de integração | `study_agent/web/__init__.py`, `study_agent/web/app.py`, `study_agent/web/templates/index.html`, `study_agent/web/static/app.js`, `study_agent/web/static/styles.css`, `study_agent/cli.py`, `requirements.txt`, `pyproject.toml`, `README.md`, `tests/test_web.py`, `tests/test_cli.py`
+- [x] `#TASK-15` | 27/11/2026 | Motor de Repetição Espaçada SM-2 (`SpacedRepetitionEngine`), campos retrocompatíveis em `Topic`, agendamento automático pós-domínio, comando CLI `review` (mantendo Streak com 0 XP e conquista *Memória Blindada*) e testes | `study_agent/core/srs.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `study_agent/models/curriculum.py`, `study_agent/cli.py`, `README.md`, `tests/test_srs.py`, `tests/test_models.py`, `tests/test_cli.py`
+- [x] `#TASK-13` | 27/11/2026 | Motor de gamificação (XP prático anti-farming, níveis Iniciante..Mestre, streaks locais, metas com prazo e 17 conquistas em 6 categorias), comando CLI goal e vitrine em status --badges com testes | `study_agent/core/gamification.py`, `study_agent/core/__init__.py`, `study_agent/models/student.py`, `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/cli.py`, `README.md`, `tests/test_gamification.py`, `tests/test_models.py`, `tests/test_cli.py`
 - [x] `#TASK-12` | 25/11/2026 | Exportador de resumos Markdown (frontmatter + Mermaid + details de Active Recall) e decks TSV Anki 2.1.54+ com histórico RecallRecord e comando CLI export | `study_agent/core/exporter.py`, `study_agent/core/evaluator.py`, `study_agent/core/__init__.py`, `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/config.py`, `study_agent/cli.py`, `.gitignore`, `README.md`, `tests/test_exporter.py`, `tests/test_cli.py`
 - [x] `#TASK-11` | 25/11/2026 | Ergonomia de execução no Windows (wrapper study-agent.bat com UTF-8, pyproject.toml, __main__.py, instruções portáteis na CLI e README.md com guia Set-ExecutionPolicy) | `study-agent.bat`, `pyproject.toml`, `study_agent/__main__.py`, `study_agent/cli.py`, `requirements.txt`, `README.md`, `tests/test_cli.py`
 - [x] `#TASK-10` | 25/11/2026 | Modo Laboratório Guiado passo a passo (GuidedLab/LabMission) e Assistente de Debugging em tempo real (debug_error + opção [E] multilinha na CLI) com testes | `study_agent/models/curriculum.py`, `study_agent/models/__init__.py`, `study_agent/core/teacher.py`, `study_agent/cli.py`, `tests/test_models.py`, `tests/test_teacher.py`, `tests/test_cli.py`

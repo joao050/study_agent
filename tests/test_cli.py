@@ -707,3 +707,145 @@ def test_cli_export_invalid_format_returns_error_code(
         res = runner.invoke(app, ["export", "--format", "formato_invalido"])
         assert res.exit_code == 1
         assert "Formato inválido" in res.output
+
+
+def test_cli_goal_set_interactive_and_clear(
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa comando 'goal' via flags (--days, --label), modo interativo e remoção (--clear)."""
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        # Definir meta por flags
+        res_set = runner.invoke(
+            app, ["goal", "--days", "7", "--label", "Dominar Docker para Deploy"]
+        )
+        assert res_set.exit_code == 0
+        assert "Meta Atualizada com Sucesso" in res_set.output
+        assert sample_curriculum.target_days == 7
+        assert sample_curriculum.goal_label == "Dominar Docker para Deploy"
+        assert sample_curriculum.deadline_at is not None
+
+        # Prazo inválido (< 1)
+        res_bad = runner.invoke(app, ["goal", "--days", "0"])
+        assert res_bad.exit_code == 1
+
+        # Edição interativa
+        res_inter = runner.invoke(app, ["goal"], input="10\nMeta Ajustada\n")
+        assert res_inter.exit_code == 0
+        assert sample_curriculum.target_days == 10
+        assert sample_curriculum.goal_label == "Meta Ajustada"
+
+        # Limpar meta com --clear
+        res_clear = runner.invoke(app, ["goal", "--clear"])
+        assert res_clear.exit_code == 0
+        assert sample_curriculum.target_days is None
+        assert sample_curriculum.deadline_at is None
+
+
+def test_cli_status_displays_gamification_and_badges_catalog(
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa exibição de XP, patente, streak e catálogo completo em 'status --badges'."""
+    sample_student.xp = 180
+    sample_student.level = 2
+    sample_student.level_title = "Explorador"
+
+    with patch("study_agent.cli.get_store") as mock_get_store:
+        mock_store = MagicMock()
+        mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+        mock_get_store.return_value = mock_store
+
+        res = runner.invoke(app, ["status", "--badges"])
+        assert res.exit_code == 0
+        assert "Explorador" in res.output
+        assert "Catálogo de Conquistas" in res.output
+        assert "Adquirindo Conhecimento" in res.output
+        assert "Memória Blindada" in res.output
+
+
+@patch("study_agent.cli.get_store")
+@patch("study_agent.cli.Evaluator")
+def test_cli_review_command_empty_up_to_date_and_due_flow(
+    mock_evaluator_cls,
+    mock_get_store,
+    sample_student: StudentProfile,
+    sample_curriculum: Curriculum,
+):
+    """Testa comando 'review' sem tópicos dominados, com fila em dia e revisando tópico vencido."""
+    from datetime import datetime, timedelta, timezone
+
+    mock_store = MagicMock()
+    mock_store.load_active_session.return_value = (sample_student, sample_curriculum)
+    mock_get_store.return_value = mock_store
+
+    # 1. Nenhum tópico MASTERED ainda
+    res_none = runner.invoke(app, ["review"])
+    assert res_none.exit_code == 0
+    assert "ainda não possui tópicos dominados" in res_none.output
+
+    # 2. Tópico MASTERED mas agendado para o futuro -> memória em dia
+    t1 = sample_curriculum.topics[0]
+    t1.status = TopicStatus.MASTERED
+    t1.next_review_at = datetime.now(timezone.utc) + timedelta(days=5)
+
+    res_ok = runner.invoke(app, ["review"])
+    assert res_ok.exit_code == 0
+    assert "memória está 100% em dia" in res_ok.output
+
+    # 3. Tópico vencido -> executa revisão ativa, recalcula SM-2 e mantém 0 XP
+    t1.next_review_at = datetime.now(timezone.utc) - timedelta(hours=2)
+
+    mock_eval = MagicMock()
+    mock_eval.generate_active_recall_question.return_value = ActiveRecallQuestion(
+        id="q_rev",
+        question="Qual a diferença entre container e imagem?",
+        expected_concepts=["Imagem é template imutável", "Container é instância em execução"],
+    )
+    mock_eval.evaluate_active_recall.return_value = ActiveRecallEvaluation(
+        question_id="q_rev",
+        student_answer="Imagem é o molde read-only e container é o processo rodando.",
+        score=92.0,
+        understood_concepts=["Imutabilidade", "Processo"],
+        missing_or_confused_concepts=[],
+        feedback="Revisão impecável!",
+        is_passing=True,
+    )
+    mock_evaluator_cls.return_value = mock_eval
+
+    res_due = runner.invoke(
+        app,
+        ["review"],
+        input="Imagem é o molde read-only e container é o processo rodando.\n",
+    )
+    assert res_due.exit_code == 0
+    assert "Memória Consolidada!" in res_due.output
+    assert sample_student.xp == 0
+    assert sample_student.total_srs_reviews == 1
+    assert sample_student.current_streak == 1
+    assert t1.srs_repetitions == 1
+    assert t1.interval_days == 1
+    mock_store.save_student.assert_called()
+    mock_store.save_curriculum.assert_called()
+
+
+def test_cli_web_command_invokes_uvicorn():
+    """Verifica que o comando 'web' inicia o servidor Uvicorn com host e porta configurados."""
+    with patch("uvicorn.run") as mock_uvicorn_run:
+        res = runner.invoke(app, ["web", "--host", "127.0.0.1", "--port", "8123", "--no-open"])
+        assert res.exit_code == 0
+        assert "http://127.0.0.1:8123" in res.output
+        mock_uvicorn_run.assert_called_once_with(
+            "study_agent.web.app:app",
+            host="127.0.0.1",
+            port=8123,
+            reload=False,
+            log_level="info",
+        )
+
+
+

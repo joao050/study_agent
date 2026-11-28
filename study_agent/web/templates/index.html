@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="pt-BR" class="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AI Study Agent — Mentor Adaptativo & Web Studio</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    if (window.tailwind) {
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              slate950: '#070b14',
+              panel: '#0f172a',
+              panelBorder: '#1e293b',
+            }
+          }
+        }
+      };
+    }
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+  <link rel="stylesheet" href="/static/styles.css" />
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen antialiased selection:bg-cyan-500/30">
+
+  <!-- Toast Stack (XP, Level Up, Badges & Alertas) -->
+  <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-3 max-w-sm w-full pointer-events-none"></div>
+
+  <!-- Global Loading Bar -->
+  <div id="global-loader" class="hidden fixed top-0 left-0 right-0 z-50">
+    <div class="h-1 w-full bg-slate-800 overflow-hidden">
+      <div class="loader-bar h-full bg-gradient-to-r from-cyan-400 via-indigo-500 to-emerald-400"></div>
+    </div>
+    <div class="bg-slate-900/95 border-b border-slate-800 px-4 py-2 text-center text-xs text-cyan-300 font-medium" id="global-loader-text">
+      Processando com o Mentor IA...
+    </div>
+  </div>
+
+  <!-- Top Navbar -->
+  <header class="sticky top-0 z-40 backdrop-blur-md bg-slate-950/85 border-b border-slate-800/80">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 py-3 flex flex-wrap items-center justify-between gap-3">
+      <div class="flex items-center gap-3">
+        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-indigo-600 flex items-center justify-center text-xl shadow-lg shadow-cyan-500/20">
+          🧠
+        </div>
+        <div>
+          <div class="flex items-center gap-2">
+            <h1 class="font-bold text-lg tracking-tight text-white">AI Study Agent</h1>
+            <span class="text-[11px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-full bg-cyan-500/15 text-cyan-300 border border-cyan-500/30">
+              Web Studio
+            </span>
+          </div>
+          <p class="text-xs text-slate-400">Sincronizado em tempo real com sua CLI local</p>
+        </div>
+      </div>
+
+      <div class="flex flex-wrap items-center gap-2.5">
+        <select id="student-switcher" class="bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-lg px-3 py-1.5 focus:outline-none focus:border-cyan-500 hidden"></select>
+
+        <button id="btn-export" class="btn-secondary text-xs px-3 py-1.5 rounded-lg border border-slate-700 bg-slate-900 hover:bg-slate-800 text-slate-200 transition hidden" title="Exportar Resumo Markdown e Flashcards Anki">
+          📦 Exportar (.md / Anki)
+        </button>
+
+        <button id="btn-new-track" class="text-xs font-semibold px-3.5 py-2 rounded-lg bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white shadow-md shadow-cyan-500/20 transition">
+          ✨ Nova Trilha
+        </button>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav id="main-tabs" class="max-w-7xl mx-auto px-4 sm:px-6 flex gap-1 overflow-x-auto border-t border-slate-900/80 hidden">
+      <button data-tab="overview" class="tab-btn active px-4 py-2.5 text-sm font-medium border-b-2 border-cyan-400 text-cyan-300 whitespace-nowrap">
+        🗺️ Mapa & Trilha
+      </button>
+      <button data-tab="study" class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap">
+        📖 Sala de Estudo & Lab
+      </button>
+      <button data-tab="srs" class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap flex items-center gap-2">
+        <span>🔄 Revisão Rápida (SRS)</span>
+        <span id="nav-srs-badge" class="hidden text-[11px] font-bold px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/40">0</span>
+      </button>
+      <button data-tab="badges" class="tab-btn px-4 py-2.5 text-sm font-medium border-b-2 border-transparent text-slate-400 hover:text-slate-200 whitespace-nowrap flex items-center gap-2">
+        <span>🏅 Conquistas</span>
+        <span id="nav-badges-count" class="text-[11px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300">0/17</span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Main Container -->
+  <main class="max-w-7xl mx-auto px-4 sm:px-6 py-6 space-y-6">
+
+    <!-- Empty State (Sem Sessão Ativa) -->
+    <section id="empty-state" class="hidden rounded-2xl border border-slate-800 bg-slate-900/60 p-8 sm:p-12 text-center max-w-2xl mx-auto my-10">
+      <div class="text-5xl mb-4">🚀</div>
+      <h2 class="text-2xl font-bold text-white mb-2">Comece sua Jornada Adaptativa</h2>
+      <p class="text-slate-400 text-sm mb-6 leading-relaxed">
+        Nenhuma trilha ativa foi encontrada em <code class="text-cyan-300 bg-slate-800 px-1.5 py-0.5 rounded">data/</code>.
+        Crie sua primeira trilha personalizada com diagnóstico pedagógico aqui mesmo pelo navegador ou via <code class="text-cyan-300 bg-slate-800 px-1.5 py-0.5 rounded">.\study-agent init</code>!
+      </p>
+      <button id="btn-empty-start" class="px-6 py-3 rounded-xl font-semibold bg-gradient-to-r from-cyan-500 to-indigo-600 hover:from-cyan-400 hover:to-indigo-500 text-white shadow-lg shadow-cyan-500/25 transition">
+        🎓 Iniciar Diagnóstico & Criar Trilha
+      </button>
+    </section>
+
+    <!-- Active Dashboard Content -->
+    <div id="dashboard-root" class="hidden space-y-6">
+
+      <!-- Hero Gamification Strip (4 Cards) -->
+      <section class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <!-- Card 1: Nível & Barra de XP -->
+        <div class="stat-card rounded-2xl border border-slate-800 bg-slate-900/75 p-4 flex flex-col justify-between">
+          <div class="flex items-start justify-between gap-2">
+            <div>
+              <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Patente & XP Prático</span>
+              <h3 id="hero-level-title" class="text-lg font-bold text-amber-300 mt-0.5">Nv. 1 • Iniciante</h3>
+            </div>
+            <span class="text-2xl">⚡</span>
+          </div>
+          <div class="mt-3">
+            <div class="flex justify-between text-xs text-slate-300 mb-1">
+              <span id="hero-xp-numbers">0 / 150 XP</span>
+              <span id="hero-xp-pct" class="text-cyan-300 font-semibold">0%</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+              <div id="hero-xp-bar" class="h-full bg-gradient-to-r from-amber-400 via-orange-500 to-pink-500 transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <p class="text-[11px] text-slate-400 mt-1.5" id="hero-student-summary"></p>
+          </div>
+        </div>
+
+        <!-- Card 2: Chama de Streak -->
+        <div class="stat-card rounded-2xl border border-slate-800 bg-slate-900/75 p-4 flex flex-col justify-between">
+          <div class="flex items-start justify-between">
+            <div>
+              <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Ofensiva Diária</span>
+              <div class="flex items-baseline gap-2 mt-0.5">
+                <h3 id="hero-streak-days" class="text-2xl font-extrabold text-orange-400">0 dias</h3>
+                <span id="hero-streak-best" class="text-xs text-slate-400">recorde: 0d</span>
+              </div>
+            </div>
+            <span id="hero-streak-flame" class="text-3xl">🔥</span>
+          </div>
+          <p id="hero-streak-hint" class="text-xs text-slate-400 mt-3">
+            Estude um tópico ou faça uma revisão rápida para acender sua chama hoje!
+          </p>
+        </div>
+
+        <!-- Card 3: Termômetro de Meta com Prazo -->
+        <div class="stat-card rounded-2xl border border-slate-800 bg-slate-900/75 p-4 flex flex-col justify-between">
+          <div class="flex items-start justify-between gap-2">
+            <div class="min-w-0">
+              <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Termômetro de Meta</span>
+              <h3 id="hero-goal-title" class="text-sm font-bold text-white truncate mt-0.5">Sem prazo definido</h3>
+            </div>
+            <button id="btn-edit-goal" class="text-xs text-cyan-400 hover:text-cyan-300 underline shrink-0">
+              Editar
+            </button>
+          </div>
+          <div class="mt-3">
+            <div class="flex justify-between text-xs mb-1">
+              <span id="hero-goal-status" class="text-slate-300">Ritmo livre</span>
+              <span id="hero-track-pct" class="text-emerald-400 font-semibold">0%</span>
+            </div>
+            <div class="w-full h-2.5 bg-slate-800 rounded-full overflow-hidden">
+              <div id="hero-track-bar" class="h-full bg-gradient-to-r from-emerald-500 to-cyan-400 transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <p id="hero-goal-pace" class="text-[11px] text-slate-400 mt-1.5"></p>
+          </div>
+        </div>
+
+        <!-- Card 4: Fila de Retenção SRS -->
+        <div class="stat-card rounded-2xl border border-slate-800 bg-slate-900/75 p-4 flex flex-col justify-between">
+          <div class="flex items-start justify-between">
+            <div>
+              <span class="text-xs uppercase tracking-wider text-slate-400 font-semibold">Memória Espaçada (SM-2)</span>
+              <h3 id="hero-srs-headline" class="text-lg font-bold text-emerald-300 mt-0.5">Em dia!</h3>
+            </div>
+            <span class="text-2xl">🔄</span>
+          </div>
+          <div class="mt-3 flex items-center justify-between gap-2">
+            <span id="hero-srs-sub" class="text-xs text-slate-400">0 revisões concluídas</span>
+            <button id="btn-hero-srs" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-cyan-300 border border-slate-700 transition">
+              Ver Fila
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 1: VISÃO GERAL, ÁRVORE MERMAID & TÓPICOS -->
+      <section id="tab-overview" class="tab-panel space-y-6">
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Árvore de Conhecimento Interativa (Mermaid) -->
+          <div class="lg:col-span-5 rounded-2xl border border-slate-800 bg-slate-900/70 p-5 flex flex-col">
+            <div class="flex items-center justify-between mb-3">
+              <div>
+                <h2 class="text-base font-bold text-white">🌳 Árvore de Conhecimento</h2>
+                <p class="text-xs text-slate-400">Grafo DAG de pré-requisitos da trilha</p>
+              </div>
+              <span id="overview-subject-pill" class="text-xs px-2.5 py-1 rounded-full bg-indigo-500/15 text-indigo-300 border border-indigo-500/30 font-medium"></span>
+            </div>
+            <p id="overview-description" class="text-xs text-slate-300 mb-4 leading-relaxed"></p>
+            <div id="mermaid-container" class="flex-1 min-h-[260px] rounded-xl bg-slate-950/80 border border-slate-800/80 p-4 overflow-auto flex items-center justify-center">
+              <span class="text-xs text-slate-500">Renderizando grafo...</span>
+            </div>
+          </div>
+
+          <!-- Lista Interativa de Tópicos -->
+          <div class="lg:col-span-7 rounded-2xl border border-slate-800 bg-slate-900/70 p-5">
+            <div class="flex items-center justify-between mb-4">
+              <div>
+                <h2 class="text-base font-bold text-white">🧭 Tópicos da Jornada</h2>
+                <p class="text-xs text-slate-400">Selecione qualquer tópico desbloqueado para estudar, praticar no laboratório ou avaliar</p>
+              </div>
+            </div>
+            <div id="topics-list" class="space-y-3"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 2: SALA DE ESTUDO, LABORATÓRIO GUIADO, DEBUG & ACTIVE RECALL -->
+      <section id="tab-study" class="tab-panel hidden space-y-6">
+        <!-- Seletor de Tópico e Modos Pedagógicos -->
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 space-y-4">
+          <div class="flex flex-col md:flex-row md:items-center justify-between gap-4">
+            <div class="flex-1">
+              <label class="block text-xs uppercase tracking-wider text-slate-400 font-semibold mb-1">Tópico em Estudo</label>
+              <select id="study-topic-select" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"></select>
+            </div>
+            <div class="flex flex-wrap gap-2">
+              <button data-style="feynman" class="btn-explain px-3.5 py-2 rounded-xl text-xs font-semibold bg-emerald-500/15 hover:bg-emerald-500/25 text-emerald-300 border border-emerald-500/30 transition">
+                💡 Feynman
+              </button>
+              <button data-style="technical" class="btn-explain px-3.5 py-2 rounded-xl text-xs font-semibold bg-amber-500/15 hover:bg-amber-500/25 text-amber-300 border border-amber-500/30 transition">
+                ⚙️ Técnico
+              </button>
+              <button data-style="practical" class="btn-explain px-3.5 py-2 rounded-xl text-xs font-semibold bg-cyan-500/15 hover:bg-cyan-500/25 text-cyan-300 border border-cyan-500/30 transition">
+                💻 Prático
+              </button>
+              <button id="btn-generate-lab" class="px-3.5 py-2 rounded-xl text-xs font-semibold bg-fuchsia-500/20 hover:bg-fuchsia-500/30 text-fuchsia-200 border border-fuchsia-500/40 transition">
+                🧪 Laboratório Guiado (+15 XP/missão)
+              </button>
+            </div>
+          </div>
+          <p id="study-topic-desc" class="text-xs text-slate-400"></p>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <!-- Coluna Principal: Aula Markdown / Missões do Laboratório / Active Recall -->
+          <div class="lg:col-span-8 space-y-6">
+            <!-- Área de Aula Explicativa -->
+            <div id="lesson-card" class="rounded-2xl border border-slate-800 bg-slate-900/75 p-6">
+              <div id="lesson-placeholder" class="text-center py-10 text-slate-400 text-sm">
+                👆 Escolha acima um estilo de explicação (<strong>Feynman</strong>, <strong>Técnico</strong>, <strong>Prático</strong>) ou abra o <strong>Laboratório Guiado</strong> para colocar a mão na massa!
+              </div>
+              <article id="lesson-content" class="prose-dark hidden"></article>
+              <div id="lesson-takeaways" class="hidden mt-6 pt-4 border-t border-slate-800">
+                <h4 class="text-xs font-bold uppercase tracking-wider text-cyan-300 mb-2">📌 Pontos-Chave para Fixação</h4>
+                <ul id="lesson-takeaways-list" class="space-y-1.5 text-sm text-slate-300 list-disc pl-5"></ul>
+              </div>
+            </div>
+
+            <!-- Área de Laboratório Guiado Passo a Passo -->
+            <div id="lab-container" class="hidden rounded-2xl border border-fuchsia-500/30 bg-slate-900/80 p-6 space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-base font-bold text-fuchsia-300">🧪 Roteiro de Laboratório Prático</h3>
+                <span id="lab-progress-badge" class="text-xs font-semibold px-2.5 py-1 rounded-full bg-fuchsia-500/20 text-fuchsia-200"></span>
+              </div>
+              <p id="lab-intro" class="text-sm text-slate-300 leading-relaxed"></p>
+              <div id="lab-prereq" class="hidden text-xs bg-amber-500/10 border border-amber-500/30 text-amber-200 rounded-xl p-3"></div>
+              <div id="lab-missions-list" class="space-y-4"></div>
+            </div>
+
+            <!-- Área de Checagem Ativa (Active Recall) -->
+            <div class="rounded-2xl border border-indigo-500/30 bg-slate-900/80 p-6 space-y-4">
+              <div class="flex flex-wrap items-center justify-between gap-2">
+                <div>
+                  <h3 class="text-base font-bold text-indigo-300">🧠 Checagem Ativa de Domínio (Active Recall)</h3>
+                  <p class="text-xs text-slate-400">Nota >= 70% promove o tópico a Dominado (+100 XP no 1º domínio e +25 XP se >= 90%)</p>
+                </div>
+                <button id="btn-start-recall" class="px-4 py-2 rounded-xl text-xs font-semibold bg-indigo-600 hover:bg-indigo-500 text-white shadow transition">
+                  Gerar Pergunta de Avaliação
+                </button>
+              </div>
+
+              <div id="recall-box" class="hidden space-y-3 pt-2 border-t border-slate-800">
+                <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+                  <p id="recall-question-text" class="text-sm font-semibold text-white"></p>
+                  <p id="recall-hint-text" class="text-xs text-slate-400 mt-2 italic"></p>
+                </div>
+                <textarea id="recall-answer-input" rows="4" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-indigo-500" placeholder="Explique com suas próprias palavras..."></textarea>
+                <div class="flex justify-end">
+                  <button id="btn-submit-recall" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white transition">
+                    ✅ Enviar Resposta para Avaliação
+                  </button>
+                </div>
+              </div>
+
+              <div id="recall-result" class="hidden rounded-xl p-4 border"></div>
+            </div>
+          </div>
+
+          <!-- Coluna Lateral: Tira-Dúvidas & Assistente de Debugging em Tempo Real -->
+          <div class="lg:col-span-4 space-y-6">
+            <!-- Assistente de Debugging -->
+            <div class="rounded-2xl border border-rose-500/30 bg-slate-900/75 p-5 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">🔧</span>
+                <div>
+                  <h3 class="text-sm font-bold text-rose-300">Assistente de Debugging</h3>
+                  <p class="text-[11px] text-slate-400">Cole erros do terminal (habilita conquista 🐛 Caçador de Bugs)</p>
+                </div>
+              </div>
+              <input id="debug-command-input" type="text" class="w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white font-mono" placeholder="Comando executado (opcional, ex: docker ps)" />
+              <textarea id="debug-error-input" rows="4" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-rose-200 font-mono" placeholder="Cole aqui a mensagem de erro ou stack trace..."></textarea>
+              <button id="btn-run-debug" class="w-full py-2 rounded-lg text-xs font-semibold bg-rose-600/90 hover:bg-rose-500 text-white transition">
+                🩺 Diagnosticar Erro Agora
+              </button>
+              <div id="debug-output" class="hidden rounded-xl bg-slate-950 border border-slate-800 p-3.5 text-xs space-y-2"></div>
+            </div>
+
+            <!-- Tira-Dúvidas Contextual -->
+            <div class="rounded-2xl border border-slate-800 bg-slate-900/75 p-5 space-y-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">💬</span>
+                <div>
+                  <h3 class="text-sm font-bold text-amber-300">Tirar Dúvida com o Professor</h3>
+                  <p class="text-[11px] text-slate-400">Pergunte exemplos extras ou esclareça conceitos</p>
+                </div>
+              </div>
+              <textarea id="doubt-input" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-lg p-3 text-xs text-white" placeholder="Qual sua dúvida sobre este tópico?"></textarea>
+              <button id="btn-ask-doubt" class="w-full py-2 rounded-lg text-xs font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 border border-amber-500/40 transition">
+                💡 Perguntar ao Mentor
+              </button>
+              <div id="doubt-output" class="hidden rounded-xl bg-slate-950 border border-slate-800 p-3.5 text-xs prose-dark"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 3: FILA DE REVISÃO RÁPIDA (SRS / SM-2) -->
+      <section id="tab-srs" class="tab-panel hidden space-y-6">
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/75 p-6">
+          <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+            <div>
+              <h2 class="text-lg font-bold text-white">🔄 Fila de Repetição Espaçada (Algoritmo SM-2)</h2>
+              <p class="text-xs text-slate-400">
+                Revisões mantêm sua Ofensiva Diária 🔥 acesa e contam para a conquista <strong>🔒 Memória Blindada</strong> (0 XP para preservar o foco prático).
+              </p>
+            </div>
+          </div>
+
+          <div id="srs-due-list" class="space-y-3"></div>
+
+          <!-- Painel de Execução de Revisão Ativa -->
+          <div id="srs-active-card" class="hidden mt-6 pt-6 border-t border-slate-800 space-y-4">
+            <div class="flex items-center justify-between">
+              <h3 id="srs-active-title" class="text-base font-bold text-cyan-300"></h3>
+              <span id="srs-active-meta" class="text-xs text-slate-400"></span>
+            </div>
+            <div class="bg-slate-950 border border-slate-800 rounded-xl p-4">
+              <p id="srs-question-text" class="text-sm font-semibold text-white"></p>
+              <p id="srs-question-hint" class="text-xs text-slate-400 mt-1.5 italic"></p>
+            </div>
+            <textarea id="srs-answer-input" rows="3" class="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white" placeholder="Responda de memória para recalcular seu intervalo SM-2..."></textarea>
+            <div class="flex justify-end gap-2">
+              <button id="btn-cancel-srs" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white">Cancelar</button>
+              <button id="btn-submit-srs" class="px-5 py-2 rounded-xl text-xs font-bold bg-cyan-600 hover:bg-cyan-500 text-white transition">
+                🔄 Confirmar Revisão SM-2
+              </button>
+            </div>
+            <div id="srs-result-box" class="hidden rounded-xl p-4 border text-sm"></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- TAB 4: VITRINE DE CONQUISTAS (17 BADGES) -->
+      <section id="tab-badges" class="tab-panel hidden space-y-6">
+        <div class="rounded-2xl border border-slate-800 bg-slate-900/75 p-6">
+          <div class="flex items-center justify-between mb-6">
+            <div>
+              <h2 class="text-lg font-bold text-white">🏅 Galeria de Conquistas</h2>
+              <p class="text-xs text-slate-400">Desbloqueie medalhas dominando conceitos, resolvendo bugs reais, cumprindo metas e blindando sua memória</p>
+            </div>
+            <span id="badges-header-counter" class="text-sm font-bold px-3.5 py-1.5 rounded-xl bg-amber-500/15 text-amber-300 border border-amber-500/30"></span>
+          </div>
+          <div id="badges-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4"></div>
+        </div>
+      </section>
+
+    </div>
+  </main>
+
+  <!-- MODAL: EDITAR / DEFINIR META COM PRAZO -->
+  <div id="modal-goal" class="hidden fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between">
+        <h3 class="text-base font-bold text-white">🏁 Configurar Meta com Prazo</h3>
+        <button id="btn-close-goal-modal" class="text-slate-400 hover:text-white text-lg">&times;</button>
+      </div>
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Prazo em dias corridos (ex: 7 para Sprint)</label>
+          <input id="goal-days-input" type="number" min="1" max="3650" value="7" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white" />
+        </div>
+        <div>
+          <label class="block text-xs text-slate-300 mb-1">Descrição da meta</label>
+          <input id="goal-label-input" type="text" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white" placeholder="Ex: Dominar FastAPI antes do novo projeto" />
+        </div>
+      </div>
+      <div class="flex items-center justify-between pt-2">
+        <button id="btn-clear-goal" class="text-xs text-rose-400 hover:text-rose-300 underline">Remover prazo</button>
+        <div class="flex gap-2">
+          <button id="btn-cancel-goal" class="px-4 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800">Cancelar</button>
+          <button id="btn-save-goal" class="px-4 py-2 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white">Salvar Meta</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: NOVA TRILHA & DIAGNÓSTICO PEDAGÓGICO -->
+  <div id="modal-onboarding" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div class="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 space-y-5 shadow-2xl my-8">
+      <div class="flex items-center justify-between">
+        <h3 class="text-lg font-bold text-white">🎓 Nova Jornada & Diagnóstico Adaptativo</h3>
+        <button id="btn-close-onboarding" class="text-slate-400 hover:text-white text-xl">&times;</button>
+      </div>
+
+      <!-- Passo 1: Perfil e Assunto -->
+      <div id="onb-step-1" class="space-y-4">
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block text-xs text-slate-300 mb-1">Seu Nome</label>
+            <input id="onb-name" type="text" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white" placeholder="Ex: João" />
+          </div>
+          <div>
+            <label class="block text-xs text-slate-300 mb-1">O que deseja aprender?</label>
+            <input id="onb-subject" type="text" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3.5 py-2 text-sm text-white" placeholder="Ex: Docker, Rust, FastAPI" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+          <div>
+            <label class="block text-xs text-slate-300 mb-1">Objetivo Final</label>
+            <select id="onb-target-level" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+              <option value="beginner">Iniciante</option>
+              <option value="intermediate">Intermediário</option>
+              <option value="advanced" selected>Avançado</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-300 mb-1">Ritmo Diário</label>
+            <select id="onb-pace" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white">
+              <option value="relaxed">Relaxado (~25m)</option>
+              <option value="regular" selected>Regular (~45m)</option>
+              <option value="intensive">Intensivo (90m+)</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-xs text-slate-300 mb-1">Prazo Opcional (dias)</label>
+            <input id="onb-days" type="number" min="0" value="0" class="w-full bg-slate-950 border border-slate-700 rounded-xl px-3 py-2 text-sm text-white" placeholder="0 = sem prazo" />
+          </div>
+        </div>
+
+        <div class="flex justify-end pt-2">
+          <button id="btn-onb-generate-questions" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-gradient-to-r from-cyan-500 to-indigo-600 text-white">
+            🩺 Gerar 3 Perguntas de Nivelamento ➔
+          </button>
+        </div>
+      </div>
+
+      <!-- Passo 2: Responder Perguntas Diagnósticas -->
+      <div id="onb-step-2" class="hidden space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+        <p class="text-xs text-slate-400">Responda de forma concisa (ou escreva <em>"não sei"</em> se ainda não viu o conceito — isso calibra sua trilha!):</p>
+        <div id="onb-questions-list" class="space-y-3"></div>
+        <div class="flex justify-between pt-2">
+          <button id="btn-onb-back" class="px-4 py-2 rounded-xl text-xs text-slate-400 hover:text-white">⬅ Voltar</button>
+          <button id="btn-onb-finish" class="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-600 hover:bg-emerald-500 text-white">
+            🚀 Avaliar Nível & Construir Trilha
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>
